@@ -66,7 +66,7 @@ public interface DbFile {
      *
      * @return an iterator over all the tuples stored in this DbFile.
      */
-    public DbFileIterator iterator(TransactionId tid);
+    public DbFileIterator iterator(TransactionId tid) throws TransactionAbortedException, DbException;
 
     /**
      * Returns a unique ID used to identify this DbFile in the Catalog. This id

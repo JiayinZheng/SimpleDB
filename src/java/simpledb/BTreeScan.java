@@ -37,7 +37,7 @@ public class BTreeScan implements OpIterator {
 	 * 			  The index predicate to match. If null, the scan will return all tuples
 	 *            in sorted order
 	 */
-	public BTreeScan(TransactionId tid, int tableid, String tableAlias, IndexPredicate ipred) {
+	public BTreeScan(TransactionId tid, int tableid, String tableAlias, IndexPredicate ipred) throws TransactionAbortedException, DbException {
 		this.tid = tid;
 		this.ipred = ipred;
 		reset(tableid,tableAlias);
@@ -72,7 +72,7 @@ public class BTreeScan implements OpIterator {
 	 *            are, but the resulting name can be null.fieldName,
 	 *            tableAlias.null, or null.null).
 	 */
-	public void reset(int tableid, String tableAlias) {
+	public void reset(int tableid, String tableAlias) throws TransactionAbortedException, DbException {
 		this.isOpen=false;
 		this.alias = tableAlias;
 		this.tablename = Database.getCatalog().getTableName(tableid);
@@ -95,7 +95,7 @@ public class BTreeScan implements OpIterator {
 		myTd = new TupleDesc(newTypes, newNames);
 	}
 
-	public BTreeScan(TransactionId tid, int tableid, IndexPredicate ipred) {
+	public BTreeScan(TransactionId tid, int tableid, IndexPredicate ipred) throws TransactionAbortedException, DbException {
 		this(tid, tableid, Database.getCatalog().getTableName(tableid), ipred);
 	}
 
