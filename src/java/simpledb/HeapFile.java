@@ -22,6 +22,8 @@ public class HeapFile implements DbFile {
      *            the file that stores the on-disk backing store for this heap
      *            file.
      */
+    private File file;
+    private TupleDesc tupleDesc;
     public HeapFile(File f, TupleDesc td) {
         // some code goes here
     }

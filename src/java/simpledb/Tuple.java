@@ -63,7 +63,7 @@ public class  Tuple implements Serializable {
      *            new value for the field.
      */
     public void setField(int i, Field f) {
-        if(i>0&&i<fields.length){//valid
+        if(i>=0&&i<fields.length){//valid
             fields[i] = f;
         }
     }
@@ -75,7 +75,7 @@ public class  Tuple implements Serializable {
      *            field index to return. Must be a valid index.
      */
     public Field getField(int i) {
-        if(i>0&&i<fields.length){//valid
+        if(i>=0&&i<fields.length){//valid
             return fields[i];
         }
         throw new NoSuchElementException();

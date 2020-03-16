@@ -66,9 +66,7 @@ public class HeapPage implements Page {
         @return the number of tuples on this page
     */
     private int getNumTuples() {        
-        // some code goes here
-        return 0;
-
+        return (int) Math.floor((BufferPool.getPageSize()*8)/(td.getSize()*8+1));
     }
 
     /**
@@ -76,10 +74,8 @@ public class HeapPage implements Page {
      * @return the number of bytes in the header of a page in a HeapFile with each tuple occupying tupleSize bytes
      */
     private int getHeaderSize() {        
-        
-        // some code goes here
-        return 0;
-                 
+        int tupPerPage = (int) Math.floor((BufferPool.getPageSize()*8)/(td.getSize()*8+1));
+        return  (int) Math.ceil(tupPerPage/8);
     }
     
     /** Return a view of this page before it was modified
@@ -111,8 +107,7 @@ public class HeapPage implements Page {
      * @return the PageId associated with this page.
      */
     public HeapPageId getId() {
-    // some code goes here
-    throw new UnsupportedOperationException("implement this");
+       return pid;
     }
 
     /**
@@ -281,16 +276,22 @@ public class HeapPage implements Page {
      * Returns the number of empty slots on this page.
      */
     public int getNumEmptySlots() {
-        // some code goes here
-        return 0;
+        int result = 0;
+        for(int i=0;i<numSlots;i++){
+           // System.out.println(isSlotUsed(i));
+            if(!isSlotUsed(i))
+                result++;
+        }
+        return result;
     }
 
     /**
      * Returns true if associated slot on this page is filled.
      */
     public boolean isSlotUsed(int i) {
-        // some code goes here
-        return false;
+        //假设有12个元组，header应为11111111 00001111,所以采用位运算判断
+        //坑：有可能会当成补码而把111看成负数，所以不要用%2，要用位运算
+        return ((header[i/8]>>(i%8))&1)==1;
     }
 
     /**
@@ -306,8 +307,31 @@ public class HeapPage implements Page {
      * (note that this iterator shouldn't return tuples in empty slots!)
      */
     public Iterator<Tuple> iterator() {
-        // some code goes here
-        return null;
+       class tupleIterator implements Iterator<Tuple>{
+
+           int position = 0;
+           int index = 0;
+
+           @Override
+           public boolean hasNext() {
+               return position<(getNumTuples()-getNumEmptySlots())&&index<getNumTuples();
+               //下标检测
+           }
+
+           @Override
+           public Tuple next() {
+               if(!hasNext()){
+                   throw new NoSuchElementException();
+               }
+               while(!isSlotUsed(index)){
+                   index++;
+                   //找到下一个使用中的tuple
+               }
+               position++;
+               return tuples[index++];
+           }
+       }
+       return new tupleIterator();
     }
 
 }
