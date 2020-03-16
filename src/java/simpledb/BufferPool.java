@@ -2,6 +2,8 @@ package simpledb;
 
 import java.io.*;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -25,14 +27,16 @@ public class BufferPool {
     other classes. BufferPool should use the numPages argument to the
     constructor instead. */
     public static final int DEFAULT_PAGES = 50;
-
+    private int numP;
     /**
      * Creates a BufferPool that caches up to numPages pages.
      *
      * @param numPages maximum number of pages in this buffer pool.
      */
+    Map<PageId,Page> pageMap;//存放缓冲池的所有pages
     public BufferPool(int numPages) {
-        // some code goes here
+        numP = numPages;
+        pageMap = new HashMap<>();
     }
     
     public static int getPageSize() {
@@ -66,8 +70,22 @@ public class BufferPool {
      */
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
         throws TransactionAbortedException, DbException {
-        // some code goes here
-        return null;
+        if(pageMap.containsKey(pid)){
+            return pageMap.get(pid);
+        }
+        else{
+            //需要evict+add
+            //默认取出第一个
+            for(PageId pageId:pageMap.keySet()){
+                if(pageId!=null){
+                    pageMap.remove(pageId);
+                }
+            }
+            HeapFile heapFile = (HeapFile)Database.getCatalog().getDatabaseFile(pid.getTableId());
+            //从数据库中获得DBfile
+            pageMap.put(pid,heapFile.readPage(pid));
+            return heapFile.readPage(pid);
+        }
     }
 
     /**
