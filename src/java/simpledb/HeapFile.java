@@ -68,8 +68,8 @@ public class HeapFile implements DbFile {
         Page page = null;
         try{
             RandomAccessFile randomAccessFile = new RandomAccessFile(getFile(), "r");
-            int position = pid.getPageNumber();//在哪页
-            randomAccessFile.seek(position*BufferPool.getPageSize());
+            int position = pid.getPageNumber()*BufferPool.getPageSize();//在哪页
+            randomAccessFile.seek(position);
             randomAccessFile.read(data,0,data.length);
             page = new HeapPage((HeapPageId)pid,data);
         }
@@ -115,16 +115,17 @@ public class HeapFile implements DbFile {
             int position=0;
             TransactionId transactionId;
             Iterator<Tuple> tupleIterator;//用来遍历页内元组
-
+            HeapPageId heapPageId;
             public dbfileIterator(TransactionId transactionId) throws TransactionAbortedException, DbException {
                 this.transactionId = transactionId;
+                tupleIterator=null;
 
             }
 
             @Override
             public void open() throws DbException, TransactionAbortedException{
                 position = 0;
-                HeapPageId heapPageId = new HeapPageId(getId(),position);
+                heapPageId = new HeapPageId(getId(),position);
                 tupleIterator = ((HeapPage)Database.getBufferPool().getPage(transactionId, heapPageId,Permissions.READ_ONLY)).iterator();
             }
 
@@ -140,7 +141,7 @@ public class HeapFile implements DbFile {
                 if(position<numPages()-1){
                     //还可以跨页读
                     position++;
-                    HeapPageId heapPageId = new HeapPageId(getId(),position);
+                    heapPageId = new HeapPageId(getId(),position);
                     tupleIterator = ((HeapPage)Database.getBufferPool().getPage(transactionId, heapPageId,Permissions.READ_ONLY)).iterator();
                     return tupleIterator.hasNext();
                 }

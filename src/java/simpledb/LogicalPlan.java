@@ -297,8 +297,12 @@ public class LogicalPlan {
                  ss = new SeqScan(t, Database.getCatalog().getDatabaseFile(table.t).getId(), table.alias);
             } catch (NoSuchElementException e) {
                 throw new ParsingException("Unknown table " + table.t);
+            } catch (TransactionAbortedException e) {
+                e.printStackTrace();
+            } catch (DbException e) {
+                e.printStackTrace();
             }
-            
+
             subplanMap.put(table.alias,ss);
             String baseTableName = Database.getCatalog().getTableName(table.t);
             statsMap.put(baseTableName, baseTableStats.get(baseTableName));

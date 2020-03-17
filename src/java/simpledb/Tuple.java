@@ -94,7 +94,7 @@ public class  Tuple implements Serializable {
         for(int i=0;i<fields.length;i++){
            s+=fields[i].toString()+"\\";
         }
-        s.substring(0,s.length());
+        s =  s.substring(0,s.length());
         return s;
     }
 
