@@ -60,6 +60,15 @@ public class Catalog {
      * @param pkeyField the name of the primary key field
      */
     public void addTable(DbFile file, String name, String pkeyField) {
+        //判断是否存在冲突
+        if(name==null||pkeyField==null)
+            throw new IllegalArgumentException();
+        for(Integer integer: tableMap.keySet()){
+            if(tableMap.get(integer).tableName.equals(name)) {
+                tableMap.remove(integer);
+                break;//删除原先存在的
+            }
+        }
         tableMap.put(file.getId(),new Table(file,name,pkeyField));
         //tableId 和table在Map中对应
     }

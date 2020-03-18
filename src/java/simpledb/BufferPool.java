@@ -74,17 +74,20 @@ public class BufferPool {
             return pageMap.get(pid);
         }
         else{
-            //需要evict+add
-            //默认取出第一个
-            for(PageId pageId:pageMap.keySet()){
-                if(pageId!=null){
-                    pageMap.remove(pageId);
+            if(pageMap.size()>numP){
+                //需要evict+add
+                //默认取出第一个
+                for(PageId pageId:pageMap.keySet()){
+                    if(pageId!=null){
+                        pageMap.remove(pageId);
+                    }
                 }
             }
             HeapFile heapFile = (HeapFile)Database.getCatalog().getDatabaseFile(pid.getTableId());
             //从数据库中获得DBfile
-            pageMap.put(pid,heapFile.readPage(pid));
-            return heapFile.readPage(pid);
+            Page page =  heapFile.readPage(pid);
+            pageMap.put(pid,page);
+            return page;
         }
     }
 
