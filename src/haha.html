@@ -5,35 +5,15 @@
     <title>Title</title>
 </head>
 <body>
-
-<input type="button" id="btn" value="获取数据">
-<table width="80%" align="center">
-    <tr>
-        <td>
-            姓名
-        </td>
-        <tbody id="context">
-        </tbody>
-    </tr>
-
-</table>
-<script type="text/javascript" src="http://apps.bdimg.com/libs/jquery/2.1.4/jquery.min.js">
-    $(function(){
-        $("#btn").click(
-            function () {
-                $.post(
-                    {
-                        url:"${pageContext.request.contextPath}/ajax/a2",
-                        success:function (data) {
-                            console.log(data);
-                            var htmp = "";
-                        }
-                    }
-                )
-            }
-        )
-    }
-    )
-</script>
+   <script>
+       $("table td").each(function(i,item){
+           if(this.innerText.indexOf("奖学金")!==-1){
+               pattern = $(this).parent().attr("onclick").match(/\/(.+)htm/);
+               if(pattern!=null){
+                   window.open(pattern[0]);
+               }
+           }
+       })
+   </script>
 </body>
 </html>
