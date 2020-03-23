@@ -15,7 +15,7 @@ public class SeqScan implements OpIterator {
     private int tabId;
     //最好别叫tableId，容易跟初始化参数混淆
     private String tabAlias;
-    private DbFileIterator dbFileIterator;
+    public DbFileIterator dbFileIterator;
     /**
      * Creates a sequential scan over the specified table as a part of the
      * specified transaction.
