@@ -9,7 +9,9 @@ import java.io.Serializable;
 public class JoinPredicate implements Serializable {
 
     private static final long serialVersionUID = 1L;
-
+    private int jpField1;
+    private int jpField2;
+    private Predicate.Op jpOp;
     /**
      * Constructor -- create a new predicate over two fields of two tuples.
      * 
@@ -25,7 +27,9 @@ public class JoinPredicate implements Serializable {
      * @see Predicate
      */
     public JoinPredicate(int field1, Predicate.Op op, int field2) {
-        // some code goes here
+        jpField1 = field1;
+        jpField2 = field2;
+        jpOp = op;
     }
 
     /**
@@ -35,25 +39,26 @@ public class JoinPredicate implements Serializable {
      * @return true if the tuples satisfy the predicate.
      */
     public boolean filter(Tuple t1, Tuple t2) {
-        // some code goes here
-        return false;
+        //return t.getField(preField).compare(preOp,preOperand);
+        //return new Predicate(jpField1,jpOp,t1.getField(jpField1)).filter(t1)&&new Predicate(jpField2,jpOp,t2.getField(jpField2)).filter(t2);
+        return t1.getField(jpField1).compare(jpOp,t2.getField(jpField2));//难点：理解->重点看两个fields是否满足约束条件（等于，大于....)
     }
     
     public int getField1()
     {
         // some code goes here
-        return -1;
+        return jpField1;
     }
     
     public int getField2()
     {
         // some code goes here
-        return -1;
+        return jpField2;
     }
     
     public Predicate.Op getOperator()
     {
         // some code goes here
-        return null;
+        return jpOp;
     }
 }
