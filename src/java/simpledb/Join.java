@@ -1,5 +1,7 @@
 package simpledb;
 
+import com.sun.deploy.security.SelectableSecurityManager;
+
 import java.util.*;
 
 /**
@@ -20,13 +22,20 @@ public class Join extends Operator {
      * @param child2
      *            Iterator for the right(inner) relation to join
      */
+    private JoinPredicate joinP;
+    private OpIterator joinOp1;
+    private OpIterator joinOp2;
+    private Tuple t1 = null;
     public Join(JoinPredicate p, OpIterator child1, OpIterator child2) {
         // some code goes here
+        joinP = p;
+        joinOp1 = child1;
+        joinOp2 = child2;
     }
 
     public JoinPredicate getJoinPredicate() {
         // some code goes here
-        return null;
+        return joinP;
     }
 
     /**
@@ -36,7 +45,7 @@ public class Join extends Operator {
      * */
     public String getJoinField1Name() {
         // some code goes here
-        return null;
+        return joinOp1.getTupleDesc().getFieldName(joinP.getField1());
     }
 
     /**
@@ -46,7 +55,7 @@ public class Join extends Operator {
      * */
     public String getJoinField2Name() {
         // some code goes here
-        return null;
+        return joinOp2.getTupleDesc().getFieldName(joinP.getField2());
     }
 
     /**
@@ -55,20 +64,26 @@ public class Join extends Operator {
      */
     public TupleDesc getTupleDesc() {
         // some code goes here
-        return null;
+        return TupleDesc.merge(joinOp1.getTupleDesc(),joinOp2.getTupleDesc());
     }
 
     public void open() throws DbException, NoSuchElementException,
             TransactionAbortedException {
-        // some code goes here
+        joinOp1.open();
+        joinOp2.open();
+        super.open();
+
     }
 
     public void close() {
         // some code goes here
+        super.close();
+        joinOp1.close();
+        joinOp2.close();
     }
 
     public void rewind() throws DbException, TransactionAbortedException {
-        // some code goes here
+        open();
     }
 
     /**
@@ -91,13 +106,45 @@ public class Join extends Operator {
      */
     protected Tuple fetchNext() throws TransactionAbortedException, DbException {
         // some code goes here
+
+        Tuple result = null;
+        if(t1==null&&joinOp1.hasNext()){
+            t1 = joinOp1.next();
+        }
+        while(joinOp1.hasNext()||t1!=null){
+            if(t1==null){
+                t1 = joinOp1.next();
+            }
+            while(joinOp2.hasNext()){
+                Tuple t2 = joinOp2.next();
+                if(t1!=null&&t2!=null){
+                    if(joinP.filter(t1,t2)){
+                        TupleDesc td3 = TupleDesc.merge(t1.getTupleDesc(),t2.getTupleDesc());
+                        //这里有问题，需要合并
+                        Tuple t3 = new Tuple(td3);
+                        for(int i=0;i<t1.getTupleDesc().numFields();i++){
+                            t3.setField(i,t1.getField(i));
+                        }
+                        for(int i=0;i<t2.getTupleDesc().numFields();i++){
+                            t3.setField(i+t1.getTupleDesc().numFields(),t2.getField(i));
+                        }
+                        return  t3;
+                    }
+                }
+            }
+            if(!joinOp2.hasNext()){
+                joinOp2.rewind();
+                t1 = null;
+            }
+        }
+
         return null;
     }
 
     @Override
     public OpIterator[] getChildren() {
         // some code goes here
-        return null;
+        return new OpIterator[] {joinOp1,joinOp2};
     }
 
     @Override

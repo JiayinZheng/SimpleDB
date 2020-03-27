@@ -90,6 +90,8 @@ public class  Tuple implements Serializable {
      * where \t is any whitespace (except a newline)
      */
     public String toString() {
+        if(this==null)
+            return "";
         String s = new String();
         for(int i=0;i<fields.length;i++){
            s+=fields[i].toString()+"\\";
