@@ -183,9 +183,9 @@ public class IntegerAggregator implements Aggregator {
             return new TupleIterator(iagTupleDesc,tupleList);
         }
         else{
-            Tuple t = new Tuple(iagTupleDesc);
             //tupleList.clear();
             for(Field f:valueMap.keySet()){
+                Tuple t = new Tuple(iagTupleDesc);
                 t.setField(0,f);
                 t.setField(1,new IntField(valueMap.get(f)));
                 tupleList.add(t);

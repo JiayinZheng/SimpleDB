@@ -7,8 +7,7 @@ import java.util.*;
  * min). Note that we only support aggregates over a single column, grouped by a
  * single column.
  */
-public class Aggregate extends Operator {
-
+public class Aggregate extends Operator  {
     private static final long serialVersionUID = 1L;
 
     /**
@@ -36,6 +35,7 @@ public class Aggregate extends Operator {
     private Aggregator aggregator;
     //根据类型判断是int还是string来具体实现aggregator
     private OpIterator getAgIterator;
+    TupleDesc tupleDesc;
     public Aggregate(OpIterator child, int afield, int gfield, Aggregator.Op aop) {
 	// some code goes here
         agIterator = child;
@@ -155,11 +155,32 @@ public class Aggregate extends Operator {
      */
     public TupleDesc getTupleDesc() {
 	// some code goes here
-	return null;
+        if(tupleDesc!=null){
+            return tupleDesc;
+        }
+        if(groupField()==Aggregator.NO_GROUPING){
+            Type[] types = new Type[1];
+            types[0] = Type.INT_TYPE;
+            String[] strings = new String[1];
+            strings[0] = agIterator.getTupleDesc().getFieldName(aggreField);
+            tupleDesc = new TupleDesc(types,strings);
+        }
+        else{
+            Type[] types = new Type[2];
+            types[0] = Type.INT_TYPE;
+            types[1] = Type.INT_TYPE;
+            String[] strings = new String[2];
+            strings[0] =  agIterator.getTupleDesc().getFieldName(grField);
+            strings[1] = agIterator.getTupleDesc().getFieldName(aggreField);
+            tupleDesc = new TupleDesc(types,strings);
+        }
+	return tupleDesc;
     }
 
     public void close() {
 	// some code goes here
+        super.close();
+        getAgIterator.close();
     }
 
     @Override
