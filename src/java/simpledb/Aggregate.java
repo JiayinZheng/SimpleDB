@@ -29,8 +29,25 @@ public class Aggregate extends Operator {
      * @param aop
      *            The aggregation operator to use
      */
+    private OpIterator agIterator;
+    private int aggreField;
+    private int grField;
+    private Aggregator.Op aggreOp;
+    private Aggregator aggregator;
+    //根据类型判断是int还是string来具体实现aggregator
+    private OpIterator getAgIterator;
     public Aggregate(OpIterator child, int afield, int gfield, Aggregator.Op aop) {
 	// some code goes here
+        agIterator = child;
+        aggreField = afield;
+        grField = gfield;
+        aggreOp = aop;
+        if(agIterator.getTupleDesc().getFieldType(afield)==Type.INT_TYPE){
+            aggregator = new IntegerAggregator(grField,agIterator.getTupleDesc().getFieldType(gfield),afield,aop);
+        }
+        else{
+            aggregator = new StringAggregator(grField,agIterator.getTupleDesc().getFieldType(gfield),afield,aop);
+        }
     }
 
     /**
@@ -40,7 +57,12 @@ public class Aggregate extends Operator {
      * */
     public int groupField() {
 	// some code goes here
-	return -1;
+	  if(grField!=-1){
+	      return grField;
+      }
+	  else{
+	      return Aggregator.NO_GROUPING;
+      }
     }
 
     /**
@@ -49,16 +71,19 @@ public class Aggregate extends Operator {
      *         null;
      * */
     public String groupFieldName() {
-	// some code goes here
-	return null;
+        if(grField!=-1){
+            return aggregator.iterator().getTupleDesc().getFieldName(0);
+        }
+        else{
+            return null;
+        }
     }
 
     /**
      * @return the aggregate field
      * */
     public int aggregateField() {
-	// some code goes here
-	return -1;
+        return aggreField;
     }
 
     /**
@@ -66,16 +91,20 @@ public class Aggregate extends Operator {
      *         tuples
      * */
     public String aggregateFieldName() {
-	// some code goes here
-	return null;
+        if(grField!=-1){
+            //参数[0]是groupValue
+            return aggregator.iterator().getTupleDesc().getFieldName(1);
+        }
+        else{
+            return aggregator.iterator().getTupleDesc().getFieldName(0);
+        }
     }
 
     /**
      * @return return the aggregate operator
      * */
     public Aggregator.Op aggregateOp() {
-	// some code goes here
-	return null;
+	   return aggreOp;
     }
 
     public static String nameOfAggregatorOp(Aggregator.Op aop) {
@@ -84,7 +113,15 @@ public class Aggregate extends Operator {
 
     public void open() throws NoSuchElementException, DbException,
 	    TransactionAbortedException {
-	// some code goes here
+	    agIterator.open();
+	    super.open();
+	    while(agIterator.hasNext()){
+	        aggregator.mergeTupleIntoGroup(agIterator.next());
+	        //当还有未进入的成员时，进组进行聚合操作
+        }
+	    //全部进入后打开
+        getAgIterator = aggregator.iterator();
+	    getAgIterator.open();
     }
 
     /**
@@ -95,12 +132,14 @@ public class Aggregate extends Operator {
      * aggregate. Should return null if there are no more tuples.
      */
     protected Tuple fetchNext() throws TransactionAbortedException, DbException {
-	// some code goes here
-	return null;
+	    if(getAgIterator.hasNext()){
+	        return getAgIterator.next();
+        }
+	    return null;
     }
 
     public void rewind() throws DbException, TransactionAbortedException {
-	// some code goes here
+	    getAgIterator.rewind();
     }
 
     /**
