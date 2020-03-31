@@ -24,11 +24,10 @@ public class HeapFile implements DbFile {
      */
     private File file;
     private TupleDesc tupleDesc;
-    private List<HeapPage> heapPages;
+
     public HeapFile(File f, TupleDesc td) {
         file = f;
         tupleDesc = td;
-        heapPages = new ArrayList<>(1);
     }
 
     /**
@@ -104,7 +103,26 @@ public class HeapFile implements DbFile {
     // see DbFile.java for javadocs
     public ArrayList<Page> deleteTuple(TransactionId tid, Tuple t) throws DbException,
             TransactionAbortedException {
-        // some code goes here
+        List<HeapPage> heapPages = new ArrayList<>();
+        PageId heapPageId = t.getRecordId().getPageId();//获取该元组所在的pageId
+        boolean exist = false;
+        for(int i=0;i<numPages();++i){
+            if(heapPageId.getPageNumber()==i){
+                //是这张表
+                HeapPage deletedPage = null;
+                deletedPage = (HeapPage)Database.getBufferPool().getPage(tid,heapPageId,Permissions.READ_WRITE);
+                heapPages.add(deletedPage);
+                for(int j=0;j<deletedPage.tuples.length;++j){
+                    if(deletedPage.tuples[j].equals(t)){
+                        //找到该tuple在页中的位置
+
+                    }
+                }
+                exist = true;
+            }
+        }
+        if(!exist)
+            throw new DbException("The tuple does not exist in the file, so it cannot be deleted!");
         return null;
         // not necessary for lab1
     }

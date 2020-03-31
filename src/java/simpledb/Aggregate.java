@@ -42,11 +42,21 @@ public class Aggregate extends Operator  {
         aggreField = afield;
         grField = gfield;
         aggreOp = aop;
-        if(agIterator.getTupleDesc().getFieldType(afield)==Type.INT_TYPE){
+        if(agIterator.getTupleDesc().getFieldType(afield)==Type.INT_TYPE&&grField!=-1){
             aggregator = new IntegerAggregator(grField,agIterator.getTupleDesc().getFieldType(gfield),afield,aop);
         }
         else{
-            aggregator = new StringAggregator(grField,agIterator.getTupleDesc().getFieldType(gfield),afield,aop);
+            if(agIterator.getTupleDesc().getFieldType(afield)==Type.STRING_TYPE&&grField!=-1){
+                aggregator = new StringAggregator(grField,agIterator.getTupleDesc().getFieldType(gfield),afield,aop);
+            }
+            else{
+                if(agIterator.getTupleDesc().getFieldType(afield)==Type.INT_TYPE&&grField==-1){
+                    aggregator = new IntegerAggregator(grField,null,afield,aop);
+                }
+                else{
+                    aggregator = new StringAggregator(grField,null,afield,aop);
+                }
+            }
         }
     }
 
@@ -122,6 +132,7 @@ public class Aggregate extends Operator  {
 	    //全部进入后打开
         getAgIterator = aggregator.iterator();
 	    getAgIterator.open();
+	    super.open();
     }
 
     /**
@@ -186,12 +197,12 @@ public class Aggregate extends Operator  {
     @Override
     public OpIterator[] getChildren() {
 	// some code goes here
-	return null;
+	return new OpIterator[]{agIterator};
     }
 
     @Override
     public void setChildren(OpIterator[] children) {
-	// some code goes here
+	    agIterator = children[0];
     }
     
 }

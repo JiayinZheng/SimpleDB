@@ -22,6 +22,7 @@ public class Filter<bool> extends Operator {
     OpIterator filterOp;
     boolean isOpened = false;
     public Filter(Predicate p, OpIterator child) {
+        
         filterPre = p;
         filterOp =  child;
         opIteratorList.add(child);
@@ -88,8 +89,8 @@ public class Filter<bool> extends Operator {
     @Override
     public OpIterator[] getChildren() {
         // some code goes here
-        return (OpIterator[]) opIteratorList.toArray();
-        //return new OpIterator[] {filterOp};
+        //return (OpIterator[]) opIteratorList.toArray();
+        return new OpIterator[] {filterOp};
     }
 
     @Override

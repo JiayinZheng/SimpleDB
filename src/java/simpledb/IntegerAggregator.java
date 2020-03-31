@@ -74,9 +74,9 @@ public class IntegerAggregator implements Aggregator {
      */
     public void mergeTupleIntoGroup(Tuple tup) {
         Tuple iagTuple = new Tuple(iagTupleDesc);
-        if(!tup.getTupleDesc().equals(iagTupleDesc)){
-            return;
-        }
+//        if(!tup.getTupleDesc().equals(iagTupleDesc)){
+//            return;
+//        }
         if(notGroup){
             iagTuple.setField(0,tup.getField(aggreField));
             tupleList.add(iagTuple);
