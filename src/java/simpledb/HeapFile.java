@@ -115,7 +115,6 @@ public class HeapFile implements DbFile {
                 for(int j=0;j<deletedPage.tuples.length;++j){
                     if(deletedPage.tuples[j].equals(t)){
                         //找到该tuple在页中的位置
-
                     }
                 }
                 exist = true;
