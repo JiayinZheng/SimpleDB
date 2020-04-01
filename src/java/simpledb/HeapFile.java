@@ -24,10 +24,11 @@ public class HeapFile implements DbFile {
      */
     private File file;
     private TupleDesc tupleDesc;
-
+    private int curNum;
     public HeapFile(File f, TupleDesc td) {
         file = f;
         tupleDesc = td;
+        curNum = (int) (file.length()/BufferPool.getPageSize());//file大小和page多少有关
     }
 
     /**
@@ -82,6 +83,13 @@ public class HeapFile implements DbFile {
     public void writePage(Page page) throws IOException {
         // some code goes here
         // not necessary for lab1
+        int offset = page.getId().getPageNumber();
+        if(offset>numPages()||offset<0){
+            throw new IOException();
+        }
+        RandomAccessFile randomAccessFile = new RandomAccessFile(getFile(), "rw");
+        randomAccessFile.seek(offset*BufferPool.getPageSize());//找到写的位置
+        randomAccessFile.write(page.getPageData());
     }
 
     /**
@@ -89,21 +97,52 @@ public class HeapFile implements DbFile {
      */
     public int numPages() {
         //return BufferPool.DEFAULT_PAGES;
-        return (int) (file.length()/BufferPool.getPageSize());
+        return curNum;
+        //return ;
     }
 
     // see DbFile.java for javadocs
     public ArrayList<Page> insertTuple(TransactionId tid, Tuple t)
             throws DbException, IOException, TransactionAbortedException {
         // some code goes here
-        return null;
+        ArrayList<Page> heapPages = new ArrayList<>();
+        boolean inserted = false;
+        for(int i=0;i<curNum;++i) {
+            HeapPageId heapPageId = new HeapPageId(getId(), i);
+            HeapPage insertedPage = null;
+            insertedPage = (HeapPage) Database.getBufferPool().getPage(tid, heapPageId, Permissions.READ_WRITE);
+            //获取该页
+            int empty = insertedPage.getNumEmptySlots();
+            if (insertedPage.getNumEmptySlots() != 0) {
+                //有空间，可以插入
+                insertedPage.insertTuple(t);
+                heapPages.add(insertedPage);
+                insertedPage.markDirty(true,tid);
+                inserted = true;
+                break;
+            }
+        }
+        if(!inserted){
+            //需要新开一张page
+            HeapPageId heapPageId = new HeapPageId(getId(), curNum);
+            HeapPage insertedPage = null;
+            byte[] newByte = HeapPage.createEmptyPageData();//是静态方法
+            insertedPage = new HeapPage(heapPageId,newByte);
+            writePage(insertedPage);//写入磁盘
+            HeapPage newPage = (HeapPage) Database.getBufferPool().getPage(tid, heapPageId, Permissions.READ_WRITE);
+            curNum++;
+            newPage.insertTuple(t);
+            newPage.markDirty(true,tid);//标识脏
+            heapPages.add(newPage);
+        }
+        return heapPages;
         // not necessary for lab1
     }
 
     // see DbFile.java for javadocs
     public ArrayList<Page> deleteTuple(TransactionId tid, Tuple t) throws DbException,
             TransactionAbortedException {
-        List<HeapPage> heapPages = new ArrayList<>();
+        ArrayList<Page> heapPages = new ArrayList<>();
         PageId heapPageId = t.getRecordId().getPageId();//获取该元组所在的pageId
         boolean exist = false;
         for(int i=0;i<numPages();++i){
@@ -111,19 +150,20 @@ public class HeapFile implements DbFile {
                 //是这张表
                 HeapPage deletedPage = null;
                 deletedPage = (HeapPage)Database.getBufferPool().getPage(tid,heapPageId,Permissions.READ_WRITE);
-                heapPages.add(deletedPage);
+                //获取该页
+
                 for(int j=0;j<deletedPage.tuples.length;++j){
                     if(deletedPage.tuples[j].equals(t)){
-                        //找到该tuple在页中的位置
+                        deletedPage.deleteTuple(t);
+                        heapPages.add(deletedPage);
+                        exist = true;
                     }
                 }
-                exist = true;
             }
         }
         if(!exist)
             throw new DbException("The tuple does not exist in the file, so it cannot be deleted!");
-        return null;
-        // not necessary for lab1
+        return heapPages;
     }
 
     // see DbFile.java for javadocs

@@ -76,7 +76,7 @@ public class BufferPool {
         else{
             if(pageMap.size()>numP){
                 //需要evict+add
-                //默认取出第一个
+                //默认移走第一个
                 for(PageId pageId:pageMap.keySet()){
                     if(pageId!=null){
                         pageMap.remove(pageId);
