@@ -90,6 +90,7 @@ public class HeapFile implements DbFile {
         RandomAccessFile randomAccessFile = new RandomAccessFile(getFile(), "rw");
         randomAccessFile.seek(offset*BufferPool.getPageSize());//找到写的位置
         randomAccessFile.write(page.getPageData());
+        randomAccessFile.close();
     }
 
     /**
@@ -151,18 +152,10 @@ public class HeapFile implements DbFile {
                 HeapPage deletedPage = null;
                 deletedPage = (HeapPage)Database.getBufferPool().getPage(tid,heapPageId,Permissions.READ_WRITE);
                 //获取该页
-
-                for(int j=0;j<deletedPage.tuples.length;++j){
-                    if(deletedPage.tuples[j].equals(t)){
-                        deletedPage.deleteTuple(t);
-                        heapPages.add(deletedPage);
-                        exist = true;
-                    }
-                }
+                deletedPage.deleteTuple(t);
+                //这里会检查元组的存在性
             }
         }
-        if(!exist)
-            throw new DbException("The tuple does not exist in the file, so it cannot be deleted!");
         return heapPages;
     }
 
@@ -196,7 +189,7 @@ public class HeapFile implements DbFile {
                 if(tupleIterator.hasNext())
                     return true;
                 //case 2
-                if(position<numPages()-1){
+                if(position<curNum-1){
                     //还可以跨页读
                     position++;
                     heapPageId = new HeapPageId(getId(),position);

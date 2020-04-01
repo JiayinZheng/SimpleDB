@@ -350,7 +350,8 @@ public class HeapPage implements Page {
 
            @Override
            public boolean hasNext() {
-               return position<(getNumTuples()-getNumEmptySlots())&&index<getNumTuples();
+               int empty = getNumEmptySlots();
+               return index<getNumTuples()&&position<(numSlots-empty);
                //下标检测
            }
 
@@ -359,11 +360,11 @@ public class HeapPage implements Page {
                if(!hasNext()){
                    throw new NoSuchElementException();
                }
-               while(!isSlotUsed(index)){
+
+               for(;!isSlotUsed(index);){
                    index++;
-                   //找到下一个使用中的tuple
                }
-               position++;
+               position++;//记录有多少个非空的
                return tuples[index++];
            }
        }

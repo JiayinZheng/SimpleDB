@@ -2,6 +2,7 @@ package simpledb;
 
 import java.io.*;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -154,7 +155,29 @@ public class BufferPool {
     public void insertTuple(TransactionId tid, int tableId, Tuple t)
         throws DbException, IOException, TransactionAbortedException {
         // some code goes here
-        // not necessary for lab1
+        //catalog连接文件！！！
+        HeapFile heapFile = (HeapFile) Database.getCatalog().getDatabaseFile(tableId);
+        ArrayList<Page> insertedPages  = heapFile.insertTuple(tid,t);
+        //找到进行插入工作的所有pages
+        for(Page p:insertedPages){
+            p.markDirty(true,tid);
+            if(!pageMap.containsValue(p)){
+                //没有的话，要加入缓冲池
+                if(pageMap.size()<numP){
+                    //还有地方加入
+                    pageMap.put(p.getId(),p);
+                }
+                else{
+                    //需要evict+add
+                    //默认移走第一个
+                    for(PageId pageId:pageMap.keySet()){
+                        if(pageId!=null){
+                            pageMap.remove(pageId);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -174,6 +197,28 @@ public class BufferPool {
         throws DbException, IOException, TransactionAbortedException {
         // some code goes here
         // not necessary for lab1
+        HeapFile heapFile = (HeapFile) Database.getCatalog().getDatabaseFile(t.getRecordId().getPageId().getTableId());
+        //关系 tuple有recordId->pageId->tableId
+        ArrayList<Page> deletedPages = heapFile.deleteTuple(tid, t);
+        for (Page p : deletedPages) {
+            p.markDirty(true, tid);
+            //脏：进行插入更新删除等操作
+            if (!pageMap.containsValue(p)) {
+                //没有的话，要加入缓冲池
+                if (pageMap.size() < numP) {
+                    //还有地方加入
+                    pageMap.put(p.getId(), p);
+                } else {
+                    //需要evict+add
+                    //默认移走第一个
+                    for (PageId pageId : pageMap.keySet()) {
+                        if (pageId != null) {
+                            pageMap.remove(pageId);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -183,7 +228,7 @@ public class BufferPool {
      */
     public synchronized void flushAllPages() throws IOException {
         // some code goes here
-        // not necessary for lab1
+
 
     }
 
