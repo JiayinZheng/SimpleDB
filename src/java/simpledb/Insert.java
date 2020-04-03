@@ -14,6 +14,7 @@ public class Insert extends Operator {
     private HeapPage heapPage;
     private int count = 0;
     private boolean isOpened = false;
+    private boolean isCalled = false;
     /**
      * Constructor.
      *
@@ -106,10 +107,16 @@ public class Insert extends Operator {
      * @see BufferPool#insertTuple
      */
     protected Tuple fetchNext() throws TransactionAbortedException, DbException {
-        BufferPool bufferPool = Database.getBufferPool();
-        Tuple tuple = new Tuple(tupleDesc);
-        tuple.setField(0,new IntField(count));
-        return tuple;
+        if(!isCalled){
+            BufferPool bufferPool = Database.getBufferPool();
+            Tuple tuple = new Tuple(tupleDesc);
+            tuple.setField(0,new IntField(count));
+            isCalled =true;
+            return tuple;
+        }
+        else{
+            return null;
+        }
     }
 
     @Override
