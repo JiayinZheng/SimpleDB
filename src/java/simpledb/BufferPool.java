@@ -2,10 +2,7 @@ package simpledb;
 
 import java.io.*;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -30,15 +27,16 @@ public class BufferPool {
     constructor instead. */
     public static final int DEFAULT_PAGES = 50;
     private int numP;
+    private TransactionId transactionId;//给flush用
     /**
      * Creates a BufferPool that caches up to numPages pages.
      *
      * @param numPages maximum number of pages in this buffer pool.
      */
-    Map<PageId,Page> pageMap;//存放缓冲池的所有pages
+    Map<PageId,Page> pageMap = new HashMap<>();//存放缓冲池的所有pages
     public BufferPool(int numPages) {
         numP = numPages;
-        pageMap = new HashMap<>();
+
     }
     
     public static int getPageSize() {
@@ -236,7 +234,9 @@ public class BufferPool {
      */
     public synchronized void flushAllPages() throws IOException {
         // some code goes here
-
+        for(Page page:pageMap.values()){
+            flushPage(page.getId());
+        }
 
     }
 
@@ -248,9 +248,16 @@ public class BufferPool {
         Also used by B+ tree files to ensure that deleted pages
         are removed from the cache so they can be reused safely
     */
-    public synchronized void discardPage(PageId pid) {
+    public synchronized void discardPage(PageId pid) throws IOException {
         // some code goes here
         // not necessary for lab1
+        //这个不确定
+        for(Page page: pageMap.values()){
+            if(page.getId().equals(pid)){
+                pageMap.remove(pid);
+                Database.getLogFile().recover();
+            }
+        }
     }
 
     /**
@@ -260,6 +267,10 @@ public class BufferPool {
     private synchronized  void flushPage(PageId pid) throws IOException {
         // some code goes here
         // not necessary for lab1
+        //即变为不dirty
+        HeapFile heapFile = (HeapFile) Database.getCatalog().getDatabaseFile(pid.getTableId());
+        HeapPage heapPage = (HeapPage) pageMap.get(pid);
+        heapPage.markDirty(true,null);//这个transactionid不知道
     }
 
     /** Write all pages of the specified transaction to disk.

@@ -51,10 +51,10 @@ public class Aggregate extends Operator  {
             }
             else{
                 if(agIterator.getTupleDesc().getFieldType(afield)==Type.INT_TYPE&&grField==-1){
-                    aggregator = new IntegerAggregator(grField,null,afield,aop);
+                    aggregator = new IntegerAggregator(Aggregator.NO_GROUPING,null,afield,aop);
                 }
                 else{
-                    aggregator = new StringAggregator(grField,null,afield,aop);
+                    aggregator = new StringAggregator(Aggregator.NO_GROUPING,null,afield,aop);
                 }
             }
         }

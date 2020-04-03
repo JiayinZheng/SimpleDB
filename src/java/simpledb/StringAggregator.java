@@ -18,9 +18,7 @@ public class StringAggregator implements Aggregator {
     private List<Tuple> tupleList = new LinkedList<>();
     private TupleDesc iagTupleDesc;
     private Field groupValue = null;
-    private Map<Field,List<Tuple>> groupMap= new HashMap<>();
     private Map<Field,Integer> valueMap = new HashMap<>();
-    private Map<Field,Integer> sumMap = new HashMap<>();
     private Map<Field,Integer> countMap = new HashMap<>();
     private int groupCount = 0;
     private int groupSum = 0;

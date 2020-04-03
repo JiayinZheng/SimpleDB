@@ -133,7 +133,7 @@ public class IntegerAggregator implements Aggregator {
 //                tuples.add(iagTuple);
             }
             else{
-                //不存在的话，设个表再放进去
+                //不存在的话，直接put放进去
                 Field f = tup.getField(groupField);
                 int thisValue = ((IntField)tup.getField(aggreField)).getValue();
                 groupCount +=1;
