@@ -347,11 +347,11 @@ public class HeapPage implements Page {
 
            int position = 0;
            int index = 0;
+           int usedSlots = numSlots-getNumEmptySlots();
 
            @Override
            public boolean hasNext() {
-               int empty = getNumEmptySlots();
-               return index<getNumTuples()&&position<(numSlots-empty);
+               return index<getNumTuples()&&position<usedSlots;
                //下标检测
            }
 

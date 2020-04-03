@@ -5,6 +5,7 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -81,6 +82,7 @@ public class BufferPool {
                 for(PageId pageId:pageMap.keySet()){
                     if(pageId!=null){
                         pageMap.remove(pageId);
+                        break;
                     }
                 }
             }
@@ -163,7 +165,8 @@ public class BufferPool {
             p.markDirty(true,tid);
             if(!pageMap.containsValue(p)){
                 //没有的话，要加入缓冲池
-                if(pageMap.size()<numP){
+                int size = pageMap.keySet().size();
+                if(pageMap.keySet().size()<numP){
                     //还有地方加入
                     pageMap.put(p.getId(),p);
                 }
@@ -173,8 +176,11 @@ public class BufferPool {
                     for(PageId pageId:pageMap.keySet()){
                         if(pageId!=null){
                             pageMap.remove(pageId);
+                            break;
                         }
                     }
+
+                    pageMap.put(p.getId(),p);
                 }
             }
         }
@@ -214,8 +220,10 @@ public class BufferPool {
                     for (PageId pageId : pageMap.keySet()) {
                         if (pageId != null) {
                             pageMap.remove(pageId);
+                            break;
                         }
                     }
+                    pageMap.put(p.getId(), p);
                 }
             }
         }

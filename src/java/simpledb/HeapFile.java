@@ -24,11 +24,9 @@ public class HeapFile implements DbFile {
      */
     private File file;
     private TupleDesc tupleDesc;
-    private int curNum;
     public HeapFile(File f, TupleDesc td) {
         file = f;
         tupleDesc = td;
-        curNum = (int) (file.length()/BufferPool.getPageSize());//file大小和page多少有关
     }
 
     /**
@@ -84,13 +82,17 @@ public class HeapFile implements DbFile {
         // some code goes here
         // not necessary for lab1
         int offset = page.getId().getPageNumber();
-        if(offset>numPages()||offset<0){
-            throw new IOException();
-        }
-        RandomAccessFile randomAccessFile = new RandomAccessFile(getFile(), "rw");
-        randomAccessFile.seek(offset*BufferPool.getPageSize());//找到写的位置
-        randomAccessFile.write(page.getPageData());
-        randomAccessFile.close();
+//        if(offset>numPages()||offset<0){
+//            throw new IOException();
+//        }
+        FileOutputStream fileOutputStream = new FileOutputStream(file,true);
+        fileOutputStream.write(page.getPageData());
+        fileOutputStream.close();
+
+//        RandomAccessFile randomAccessFile = new RandomAccessFile(getFile(), "rw");
+//        randomAccessFile.seek(offset*BufferPool.getPageSize());//找到写的位置
+//        randomAccessFile.write(page.getPageData());
+//        randomAccessFile.close();
     }
 
     /**
@@ -98,7 +100,7 @@ public class HeapFile implements DbFile {
      */
     public int numPages() {
         //return BufferPool.DEFAULT_PAGES;
-        return curNum;
+        return (int) (file.length()/BufferPool.getPageSize());
         //return ;
     }
 
@@ -108,10 +110,9 @@ public class HeapFile implements DbFile {
         // some code goes here
         ArrayList<Page> heapPages = new ArrayList<>();
         boolean inserted = false;
-        for(int i=0;i<curNum;++i) {
+        for(int i=0;i<numPages();++i) {
             HeapPageId heapPageId = new HeapPageId(getId(), i);
-            HeapPage insertedPage = null;
-            insertedPage = (HeapPage) Database.getBufferPool().getPage(tid, heapPageId, Permissions.READ_WRITE);
+            HeapPage insertedPage =(HeapPage) Database.getBufferPool().getPage(tid, heapPageId, Permissions.READ_WRITE);
             //获取该页
             int empty = insertedPage.getNumEmptySlots();
             if (insertedPage.getNumEmptySlots() != 0) {
@@ -120,20 +121,24 @@ public class HeapFile implements DbFile {
                 heapPages.add(insertedPage);
                 insertedPage.markDirty(true,tid);
                 inserted = true;
-                break;
+                return heapPages;
             }
         }
         if(!inserted){
             //需要新开一张page
-            HeapPageId heapPageId = new HeapPageId(getId(), curNum);
+            HeapPageId heapPageId = new HeapPageId(getId(), numPages());
             HeapPage insertedPage = null;
             byte[] newByte = HeapPage.createEmptyPageData();//是静态方法
             insertedPage = new HeapPage(heapPageId,newByte);
-            writePage(insertedPage);//写入磁盘
-            HeapPage newPage = (HeapPage) Database.getBufferPool().getPage(tid, heapPageId, Permissions.READ_WRITE);
-            curNum++;
+            //curNum++;
+            BufferedOutputStream bw = new BufferedOutputStream(new FileOutputStream(getFile(), true));
+            bw.write(newByte);
+            bw.close();
+            HeapPage newPage = new HeapPage(new HeapPageId(getId(), numPages() - 1),
+                    HeapPage.createEmptyPageData());
+           // HeapPage newPage = (HeapPage) Database.getBufferPool().getPage(tid, heapPageId, Permissions.READ_WRITE);
             newPage.insertTuple(t);
-            newPage.markDirty(true,tid);//标识脏
+            //newPage.markDirty(true,tid);//标识脏
             heapPages.add(newPage);
         }
         return heapPages;
@@ -153,6 +158,7 @@ public class HeapFile implements DbFile {
                 deletedPage = (HeapPage)Database.getBufferPool().getPage(tid,heapPageId,Permissions.READ_WRITE);
                 //获取该页
                 deletedPage.deleteTuple(t);
+                heapPages.add(deletedPage);
                 //这里会检查元组的存在性
             }
         }
@@ -177,7 +183,7 @@ public class HeapFile implements DbFile {
             public void open() throws DbException, TransactionAbortedException{
                 position = 0;
                 heapPageId = new HeapPageId(getId(),position);
-                tupleIterator = ((HeapPage)Database.getBufferPool().getPage(transactionId, heapPageId,Permissions.READ_ONLY)).iterator();
+                tupleIterator = ((HeapPage)Database.getBufferPool().getPage(transactionId, heapPageId,Permissions.READ_WRITE)).iterator();
             }
 
             @Override
@@ -189,7 +195,9 @@ public class HeapFile implements DbFile {
                 if(tupleIterator.hasNext())
                     return true;
                 //case 2
-                if(position<curNum-1){
+                //int size = curNum;
+                int size = (Database.getBufferPool().pageMap.keySet().size());
+                if(position<numPages()-1){
                     //还可以跨页读
                     position++;
                     heapPageId = new HeapPageId(getId(),position);
