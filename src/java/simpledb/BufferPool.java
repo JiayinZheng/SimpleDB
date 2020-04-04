@@ -71,25 +71,28 @@ public class BufferPool {
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
         throws TransactionAbortedException, DbException {
         if(pageMap.containsKey(pid)){
+            HeapPage heapPage = (HeapPage) pageMap.get(pid);
+            heapPage.setUsedTimes(heapPage.getUsedTimes()+1);
             return pageMap.get(pid);
         }
         else{
             if(pageMap.size()>numP){
                 //需要evict+add
                 //默认移走第一个
-                for(PageId pageId:pageMap.keySet()){
-                    if(pageId!=null){
-                        pageMap.remove(pageId);
-                        break;
-                    }
-                }
+                evictPage();
+//                for(PageId pageId:pageMap.keySet()){
+//                    if(pageId!=null){
+//                        pageMap.remove(pageId);
+//                        break;
+//                    }
+//                }
             }
             HeapFile heapFile = (HeapFile)Database.getCatalog().getDatabaseFile(pid.getTableId());
             //从数据库中获得DBfile
             Page page =  heapFile.readPage(pid);
+            page.setUsedTimes(1);
             pageMap.put(pid,page);
             return page;
-
         }
     }
 
@@ -171,12 +174,13 @@ public class BufferPool {
                 else{
                     //需要evict+add
                     //默认移走第一个
-                    for(PageId pageId:pageMap.keySet()){
-                        if(pageId!=null){
-                            pageMap.remove(pageId);
-                            break;
-                        }
-                    }
+                    evictPage();
+//                    for(PageId pageId:pageMap.keySet()){
+//                        if(pageId!=null){
+//                            pageMap.remove(pageId);
+//                            break;
+//                        }
+//                    }
 
                     pageMap.put(p.getId(),p);
                 }
@@ -215,12 +219,13 @@ public class BufferPool {
                 } else {
                     //需要evict+add
                     //默认移走第一个
-                    for (PageId pageId : pageMap.keySet()) {
-                        if (pageId != null) {
-                            pageMap.remove(pageId);
-                            break;
-                        }
-                    }
+                    evictPage();
+//                    for (PageId pageId : pageMap.keySet()) {
+//                        if (pageId != null) {
+//                            pageMap.remove(pageId);
+//                            break;
+//                        }
+//                    }
                     pageMap.put(p.getId(), p);
                 }
             }
@@ -287,6 +292,17 @@ public class BufferPool {
     private synchronized  void evictPage() throws DbException {
         // some code goes here
         // not necessary for lab1
+        //移除使用次数最少的，后续应用最小堆实现，提高效率
+        PageId minPage = null;
+        int minUsed = 999999;
+        for (PageId pageId : pageMap.keySet()) {
+            if (pageMap.get(pageId).getUsedTimes()<minUsed) {
+                minUsed = pageMap.get(pageId).getUsedTimes();
+                minPage = pageId;
+            }
+        }
+        pageMap.remove(minPage);
+
     }
 
 }

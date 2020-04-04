@@ -220,6 +220,16 @@ public class BTreeInternalPage extends BTreePage {
 		return child;
 	}
 
+	@Override
+	public int getUsedTimes() {
+		return 0;
+	}
+
+	@Override
+	public void setUsedTimes(int usedTimes) {
+
+	}
+
 	/**
 	 * Generates a byte array representing the contents of this page.
 	 * Used to serialize this page to disk.

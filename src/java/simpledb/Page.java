@@ -11,7 +11,11 @@ package simpledb;
  *     Page(PageId id, byte[] data)
  */
 public interface Page {
+     public int usedTimes = 0;
+     public int getUsedTimes() ;
 
+
+    public void setUsedTimes(int usedTimes);
     /**
      * Return the id of this page.  The id is a unique identifier for a page
      * that can be used to look up the page on disk or determine if the page

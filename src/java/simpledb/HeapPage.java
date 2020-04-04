@@ -23,6 +23,16 @@ public class HeapPage implements Page {
     private final Byte oldDataLock=new Byte((byte)0);
     boolean isDirty = false;
     TransactionId dirtyTID;
+    int usedTimes = 0;
+
+    public int getUsedTimes() {
+        return usedTimes;
+    }
+
+    public void setUsedTimes(int usedTimes) {
+        this.usedTimes = usedTimes;
+    }
+
     /**
      * Create a HeapPage from a set of bytes of data read from disk.
      * The format of a HeapPage is a set of header bytes indicating
