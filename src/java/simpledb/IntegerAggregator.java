@@ -32,7 +32,12 @@ public class IntegerAggregator implements Aggregator {
     private List<Tuple> tupleList = new LinkedList<>();
     private TupleDesc iagTupleDesc;
     private Field groupValue = null;
-
+    private int ngValue = 0;
+    private int ngCount = 0;
+    private int ngSum = 0;
+    private int ngMax;
+    private int ngMin;
+    private List<Tuple> ngList = new LinkedList<>();
     private Map<Field,List<Tuple>> groupMap= new HashMap<>();
     private Map<Field,Integer> valueMap = new HashMap<>();
     private Map<Field,Integer> sumMap = new HashMap<>();
@@ -54,6 +59,7 @@ public class IntegerAggregator implements Aggregator {
             Type[] types = new Type[1];
             types[0] = Type.INT_TYPE;
             iagTupleDesc = new TupleDesc(types);
+
         }
         else{
             //有group操作，则返回（groupVal,aggreVal)
@@ -79,7 +85,39 @@ public class IntegerAggregator implements Aggregator {
 //        }
         if(notGroup){
             iagTuple.setField(0,tup.getField(aggreField));
+            ngCount+=1;
+            ngSum+=((IntField)(tup.getField(aggreField))).getValue();
+            if(tupleList.size()==0){
+                //当前组内空
+                ngMax = ((IntField)(tup.getField(aggreField))).getValue();
+                ngMin = ((IntField)(tup.getField(aggreField))).getValue();
+            }
+            int thisValue = ((IntField)tup.getField(aggreField)).getValue();
+            switch (aggreOp){
+
+                case MIN:
+                    ngMin= Math.min(ngMin, thisValue);
+                    ngValue = ngMin;
+                    break;
+                case MAX:
+                    ngMax = Math.max(ngMax,thisValue);
+                    ngValue = ngMax;
+                    break;
+                case SUM:
+                    ngValue = ngSum;
+                    break;
+                case COUNT:
+                    ngValue = ngCount;
+                    break;
+                case AVG:
+                    ngValue = ngSum/ngCount;
+                    break;
+                default:
+                    break;
+
+            }
             tupleList.add(iagTuple);
+
         }
         else{
             if(valueMap.containsKey(tup.getField(groupField))){
@@ -134,18 +172,18 @@ public class IntegerAggregator implements Aggregator {
             }
             else{
                 //不存在的话，直接put放进去
-                Field f = tup.getField(groupField);
-                int thisValue = ((IntField)tup.getField(aggreField)).getValue();
-                groupCount +=1;
-                countMap.put(f,1);
-                sumMap.put(f,thisValue);
-                switch (aggreOp){
-                    case MIN:
-                    case MAX:
-                        valueMap.put(f,thisValue);
-                        break;
-                    case COUNT:
-                        valueMap.put(f,1);
+                        Field f = tup.getField(groupField);
+                        int thisValue = ((IntField)tup.getField(aggreField)).getValue();
+                        groupCount +=1;
+                        countMap.put(f,1);
+                        sumMap.put(f,thisValue);
+                        switch (aggreOp){
+                            case MIN:
+                            case MAX:
+                                valueMap.put(f,thisValue);
+                                break;
+                            case COUNT:
+                                valueMap.put(f,1);
                         break;
                     case SUM:
                         valueMap.put(f,thisValue);
@@ -180,7 +218,10 @@ public class IntegerAggregator implements Aggregator {
     public OpIterator iterator() {
         // some code goes here
         if(notGroup){
-            return new TupleIterator(iagTupleDesc,tupleList);
+            Tuple t = new Tuple(iagTupleDesc);
+            t.setField(0, new IntField(ngValue));
+            ngList.add(t);
+            return new TupleIterator(iagTupleDesc,ngList);
         }
         else{
             //tupleList.clear();

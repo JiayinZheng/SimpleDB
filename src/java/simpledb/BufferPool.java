@@ -1,5 +1,7 @@
 package simpledb;
 
+import javafx.util.Pair;
+
 import java.io.*;
 
 import java.util.*;
@@ -28,6 +30,13 @@ public class BufferPool {
     public static final int DEFAULT_PAGES = 50;
     private int numP;
     private TransactionId transactionId;//给flush用
+    private Queue<Page> usedQueue = new PriorityQueue<>(DEFAULT_PAGES, new Comparator<Page>() {
+
+        @Override
+        public int compare(Page o1, Page o2) {
+            return o1.getUsedTimes()-o2.getUsedTimes();
+        }
+    });//存放使用次数和pageId的对应
     /**
      * Creates a BufferPool that caches up to numPages pages.
      *
@@ -38,7 +47,7 @@ public class BufferPool {
         numP = numPages;
 
     }
-    
+
     public static int getPageSize() {
       return pageSize;
     }
@@ -73,13 +82,21 @@ public class BufferPool {
         if(pageMap.containsKey(pid)){
             HeapPage heapPage = (HeapPage) pageMap.get(pid);
             heapPage.setUsedTimes(heapPage.getUsedTimes()+1);
+            for(Page page:usedQueue){
+                if(page.getId().equals(pid)){
+                    //找到后更新
+                    page.setUsedTimes(page.getUsedTimes()+1);
+                    break;
+                }
+            }
             return pageMap.get(pid);
         }
         else{
             if(pageMap.size()>numP){
+                evictPage();
                 //需要evict+add
                 //默认移走第一个
-                evictPage();
+
 //                for(PageId pageId:pageMap.keySet()){
 //                    if(pageId!=null){
 //                        pageMap.remove(pageId);
@@ -91,6 +108,7 @@ public class BufferPool {
             //从数据库中获得DBfile
             Page page =  heapFile.readPage(pid);
             page.setUsedTimes(1);
+            usedQueue.add(page);
             pageMap.put(pid,page);
             return page;
         }
@@ -293,15 +311,18 @@ public class BufferPool {
         // some code goes here
         // not necessary for lab1
         //移除使用次数最少的，后续应用最小堆实现，提高效率
-        PageId minPage = null;
-        int minUsed = 999999;
-        for (PageId pageId : pageMap.keySet()) {
-            if (pageMap.get(pageId).getUsedTimes()<minUsed) {
-                minUsed = pageMap.get(pageId).getUsedTimes();
-                minPage = pageId;
-            }
-        }
-        pageMap.remove(minPage);
+        pageMap.remove(usedQueue.element().getId());
+        usedQueue.poll();
+        //自己循环遍历的（空间少，但时间复杂度高）
+//        PageId minPage = null;
+//        int minUsed = 999999;
+//        for (PageId pageId : pageMap.keySet()) {
+//            if (pageMap.get(pageId).getUsedTimes()<minUsed) {
+//                minUsed = pageMap.get(pageId).getUsedTimes();
+//                minPage = pageId;
+//            }
+//        }
+//        pageMap.remove(minPage);
 
     }
 
