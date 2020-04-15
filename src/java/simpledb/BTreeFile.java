@@ -315,7 +315,7 @@ public class BTreeFile implements DbFile {
 		BTreeEntry bTreeEntry = new BTreeEntry(curTuple.getField(keyField()),page.pid,newPage.pid);
 		//要被提升的entry
 		parentPage.insertEntry(bTreeEntry);
-		parentPage.updateEntry(bTreeEntry);
+		//parentPage.updateEntry(bTreeEntry);
 		updateParentPointers(tid,dirtypages,parentPage);//重要！要把所有它的孩子的指针都正确指向（因为新插入了entry)
 		if(curTuple.getField(keyField).compare(Op.LESS_THAN,field)){
 			//代插入项大于等于中位数
@@ -353,9 +353,9 @@ public class BTreeFile implements DbFile {
 			BTreeInternalPage page, Field field) 
 					throws DbException, IOException, TransactionAbortedException {
 		// some code goes here
-        BTreeInternalPage newPage = (BTreeInternalPage) getEmptyPage(tid,dirtypages,page.pid.pgcateg());
+        BTreeInternalPage newPage = (BTreeInternalPage) getEmptyPage(tid,dirtypages,BTreePageId.INTERNAL);
 
-        BTreeInternalPage oldParent = (BTreeInternalPage) getParentWithEmptySlots(tid,dirtypages,page.getParentId(),field);
+
 
         int half = page.getNumEntries()%2==0?(page.getNumEntries()/2-1):(page.getNumEntries()/2);
         Iterator<BTreeEntry> entryReverseIterator = page.reverseIterator();
@@ -365,19 +365,28 @@ public class BTreeFile implements DbFile {
 			if(entryReverseIterator.hasNext()){
 				curEntry = entryReverseIterator.next();
 				page.deleteKeyAndRightChild(curEntry);
+				if(curEntry.getRecordId()!=null){
+					page.updateEntry(curEntry);
+				}
 				newPage.insertEntry(curEntry);
+				if(curEntry.getRecordId()!=null){
+					newPage.updateEntry(curEntry);
+				}
 				cur++;
 			}
 		}
+		BTreeInternalPage oldParent = getParentWithEmptySlots(tid,dirtypages,page.getParentId(),field);
 		curEntry = entryReverseIterator.next();
 		//中位数两边都不在,区别于splitLeaf!
 
 		curEntry.setLeftChild(page.pid);
 		curEntry.setRightChild(newPage.pid);
-		updateParentPointers(tid,dirtypages,newPage);
-		updateParentPointers(tid,dirtypages,page);
-		page.deleteKeyAndLeftChild(curEntry);
+//
+//		updateParentPointers(tid,dirtypages,page);
+		page.deleteKeyAndRightChild(curEntry);
+		//删除的都是右孩子，左孩子必须保留，否则前一个的右孩子就会丢失
 		oldParent.insertEntry(curEntry);
+		updateParentPointers(tid,dirtypages,newPage);
 		if(field.compare(Op.LESS_THAN_OR_EQ,curEntry.getKey())){
 			return page;
 		}
