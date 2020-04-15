@@ -180,7 +180,7 @@ public class BufferPool {
         throws DbException, IOException, TransactionAbortedException {
         // some code goes here
         //catalog连接文件！！！
-        HeapFile heapFile = (HeapFile) Database.getCatalog().getDatabaseFile(tableId);
+        DbFile heapFile = Database.getCatalog().getDatabaseFile(tableId);
         ArrayList<Page> insertedPages  = heapFile.insertTuple(tid,t);
         //找到进行插入工作的所有pages
         for(Page p:insertedPages){
