@@ -80,7 +80,8 @@ public class BufferPool {
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
         throws TransactionAbortedException, DbException {
         if(pageMap.containsKey(pid)){
-            HeapPage heapPage = (HeapPage) pageMap.get(pid);
+            Page heapPage = pageMap.get(pid);
+            //用多态！！！
             heapPage.setUsedTimes(heapPage.getUsedTimes()+1);
             for(Page page:usedQueue){
                 if(page.getId().equals(pid)){
@@ -104,7 +105,9 @@ public class BufferPool {
 //                    }
 //                }
             }
-            HeapFile heapFile = (HeapFile)Database.getCatalog().getDatabaseFile(pid.getTableId());
+            DbFile heapFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
+           // HeapFile heapFile = (HeapFile)Database.getCatalog().getDatabaseFile(pid.getTableId());
+            //这个地方用多态实现
             //从数据库中获得DBfile
             Page page =  heapFile.readPage(pid);
             page.setUsedTimes(1);
