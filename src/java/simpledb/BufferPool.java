@@ -226,7 +226,7 @@ public class BufferPool {
         throws DbException, IOException, TransactionAbortedException {
         // some code goes here
         // not necessary for lab1
-        HeapFile heapFile = (HeapFile) Database.getCatalog().getDatabaseFile(t.getRecordId().getPageId().getTableId());
+        DbFile heapFile = Database.getCatalog().getDatabaseFile(t.getRecordId().getPageId().getTableId());
         //关系 tuple有recordId->pageId->tableId
         ArrayList<Page> deletedPages = heapFile.deleteTuple(tid, t);
         for (Page p : deletedPages) {
@@ -278,12 +278,18 @@ public class BufferPool {
         // some code goes here
         // not necessary for lab1
         //这个不确定
-        for(Page page: pageMap.values()){
-            if(page.getId().equals(pid)){
-                pageMap.remove(pid);
-                Database.getLogFile().recover();
-            }
+        if(pageMap.containsKey(pid)){
+            pageMap.remove(pid);
+            Database.getLogFile().recover();
         }
+//        for(Page page: pageMap.values()){
+//
+//            if(page.getId().equals(pid)){
+//                pageMap.remove(pid);
+//                page.markDirty(false,transactionId);
+//                Database.getLogFile().recover();
+//            }
+//        }
     }
 
     /**

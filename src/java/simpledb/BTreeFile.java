@@ -339,7 +339,6 @@ public class BTreeFile implements DbFile {
 		// the sibling pointers of all the affected leaf pages.  Return the page into which a 
 		// tuple with the given key field should be inserted.
 
-
 		//原本在它后面的
 		BTreeLeafPage newPage = (BTreeLeafPage) getEmptyPage(tid,dirtypages,page.pid.pgcateg());
 		BTreeLeafPage oldNextPage=null;
@@ -373,8 +372,12 @@ public class BTreeFile implements DbFile {
 		BTreeEntry bTreeEntry = new BTreeEntry(curTuple.getField(keyField()),page.pid,newPage.pid);
 		//要被提升的entry
 		parentPage.insertEntry(bTreeEntry);
+		//parentPage.markDirty(true,tid);
 		//parentPage.updateEntry(bTreeEntry);
-		updateParentPointers(tid,dirtypages,parentPage);//重要！要把所有它的孩子的指针都正确指向（因为新插入了entry)
+       newPage.setParentId(parentPage.pid);
+
+        //updateParentPointer(tid,dirtypages,parentPage.pid,newPage.pid);
+		//updateParentPointers(tid,dirtypages,parentPage);//重要！要把所有它的孩子的指针都正确指向（因为新插入了entry)
 		if(curTuple.getField(keyField).compare(Op.LESS_THAN,field)){
 			//代插入项大于等于中位数
 			return newPage;
@@ -414,35 +417,36 @@ public class BTreeFile implements DbFile {
         BTreeInternalPage newPage = (BTreeInternalPage) getEmptyPage(tid,dirtypages,BTreePageId.INTERNAL);
         int half = page.getNumEntries()%2==0?(page.getNumEntries()/2-1):(page.getNumEntries()/2);
         //要移动的数目
-        Iterator<BTreeEntry> entryReverseIterator = page.reverseIterator();
+		Iterator<BTreeEntry> entryReverseIterator = page.reverseIterator();
         int cur=0;
 		BTreeEntry curEntry = null;
 		while(cur<half){
 			if(entryReverseIterator.hasNext()){
 				curEntry = entryReverseIterator.next();
 				page.deleteKeyAndRightChild(curEntry);
-				if(curEntry.getRecordId()!=null){
-					page.updateEntry(curEntry);
-				}
+//				if(curEntry.getRecordId()!=null){
+//					page.updateEntry(curEntry);
+//				}
 				newPage.insertEntry(curEntry);
-				if(curEntry.getRecordId()!=null){
-					newPage.updateEntry(curEntry);
-				}
+//				if(curEntry.getRecordId()!=null){
+//					newPage.updateEntry(curEntry);
+//				}
 				cur++;
 			}
 		}
 		BTreeInternalPage oldParent = getParentWithEmptySlots(tid,dirtypages,page.getParentId(),field);
 		curEntry = entryReverseIterator.next();
 		//中位数两边都不在,区别于splitLeaf!
-
+		page.deleteKeyAndRightChild(curEntry);
+		//要放在这里，否则右子会被删掉
 		curEntry.setLeftChild(page.pid);
 		curEntry.setRightChild(newPage.pid);
 //
-//		updateParentPointers(tid,dirtypages,page);
-		page.deleteKeyAndRightChild(curEntry);
 		//删除的都是右孩子，左孩子必须保留，否则前一个的右孩子就会丢失
 		oldParent.insertEntry(curEntry);
+//        updateParentPointers(tid,dirtypages,oldParent);
 		updateParentPointers(tid,dirtypages,newPage);
+      //  updateParentPointers(tid,dirtypages,page);
 		if(field.compare(Op.LESS_THAN_OR_EQ,curEntry.getKey())){
 			return page;
 		}
@@ -718,7 +722,7 @@ public class BTreeFile implements DbFile {
 				mergeLeafPages(tid, dirtypages, leftSibling, page, parent, leftEntry);
 			}
 			else {
-				stealFromLeafPage(page, leftSibling, parent, leftEntry, false);				
+				stealFromLeafPage(page, leftSibling, parent, leftEntry, false);
 			}
 		}
 		else if(rightSiblingId != null) {	
@@ -729,7 +733,7 @@ public class BTreeFile implements DbFile {
 				mergeLeafPages(tid, dirtypages, page, rightSibling, parent, rightEntry);
 			}
 			else {
-				stealFromLeafPage(page, rightSibling, parent, rightEntry, true);				
+				stealFromLeafPage(page, rightSibling, parent, rightEntry, true);
 			}
 		}
 	}
@@ -777,6 +781,7 @@ public class BTreeFile implements DbFile {
 		}
 		entry.setKey(curTuple.getField(keyField));
 		parent.updateEntry(entry);
+
         // Move some of the tuples from the sibling to the page so
 		// that the tuples are evenly distributed. Be sure to update
 		// the corresponding parent entry.
@@ -855,38 +860,42 @@ public class BTreeFile implements DbFile {
 	protected void stealFromLeftInternalPage(TransactionId tid, HashMap<PageId, Page> dirtypages, 
 			BTreeInternalPage page, BTreeInternalPage leftSibling, BTreeInternalPage parent,
 			BTreeEntry parentEntry) throws DbException, IOException, TransactionAbortedException {
-		// some code goes here
-		int moveNum = leftSibling.getNumEntries()-(leftSibling.getNumEntries()+page.getNumEntries())/2;
+//		// some code goes here
+
+		int moveNum = ((leftSibling.getNumEntries() - page.getNumEntries()) / 2);
 		int cur = 0;
 		Iterator<BTreeEntry> bTreeEntryIterator = leftSibling.reverseIterator();
+		Iterator<BTreeEntry> iterator = page.iterator();
+		BTreeEntry right = page.iterator().next();
 		BTreeEntry curEntry = null;
 		while(cur<moveNum){
 
 			if(bTreeEntryIterator.hasNext()){
 				curEntry = bTreeEntryIterator.next();
-				leftSibling.deleteKeyAndRightChild(curEntry);
+				//leftSibling.deleteKeyAndRightChild(curEntry);
 				Field temp = curEntry.getKey();
 				curEntry.setKey(parentEntry.getKey());
 				parentEntry.setKey(temp);
+				parentEntry.setLeftChild(leftSibling.pid);
+				parentEntry.setRightChild(page.pid);
 				parent.updateEntry(parentEntry);
 				//偷梁换柱，只交换key内的值，不改变指针
 				//leftSibling.updateEntry(curEntry);
-				curEntry.setRightChild(page.iterator().next().getLeftChild());
+				curEntry.setLeftChild(curEntry.getRightChild());
+				leftSibling.deleteKeyAndRightChild(curEntry);
+				Iterator<BTreeEntry> iterator2 = page.iterator();
+				curEntry.setRightChild(iterator2.next().getLeftChild());
 				//非常重要，要把指针改过来，否则无法插入
 				page.insertEntry(curEntry);
 				page.updateEntry(curEntry);
 
-//				parentEntry.setLeftChild(curEntry.getLeftChild());
-//				parentEntry.setRightChild(curEntry.getRightChild());
-//				page.insertEntry(parentEntry);
-//				page.updateEntry(parentEntry);
-//				parentEntry.setKey(curEntry.getKey());
-//				leftSibling.deleteKeyAndRightChild(curEntry);
-//				leftSibling.updateEntry(curEntry);
+
+				//leftSibling.updateEntry(curEntry);
 			}
 			cur++;
 		}
-        updateParentPointers(tid,dirtypages,page);
+        //updateParentPointers(tid,dirtypages,leftSibling);
+		updateParentPointers(tid,dirtypages,page);
         // Move some of the entries from the left sibling to the page so
 		// that the entries are evenly distributed. Be sure to update
 		// the corresponding parent entry. Be sure to update the parent
@@ -911,31 +920,66 @@ public class BTreeFile implements DbFile {
 	 * @throws IOException
 	 * @throws TransactionAbortedException
 	 */
-	protected void stealFromRightInternalPage(TransactionId tid, HashMap<PageId, Page> dirtypages, 
+	protected void stealFromRightInternalPage(TransactionId tid, HashMap<PageId, Page> dirtypages,
 			BTreeInternalPage page, BTreeInternalPage rightSibling, BTreeInternalPage parent,
 			BTreeEntry parentEntry) throws DbException, IOException, TransactionAbortedException {
 		// some code goes here
-		int moveNum = rightSibling.getNumEntries()-(rightSibling.getNumEntries()+page.getNumEntries())/2;
+		int moveNum = ((rightSibling.getNumEntries() - page.getNumEntries()) / 2);
 		int cur = 0;
 		Iterator<BTreeEntry> bTreeEntryIterator = rightSibling.iterator();
+		Iterator<BTreeEntry> iterator = page.reverseIterator();
 		BTreeEntry curEntry = null;
 		while(cur<moveNum){
+
 			if(bTreeEntryIterator.hasNext()){
 				curEntry = bTreeEntryIterator.next();
+				//leftSibling.deleteKeyAndRightChild(curEntry);
 				Field temp = curEntry.getKey();
 				curEntry.setKey(parentEntry.getKey());
 				parentEntry.setKey(temp);
+				parentEntry.setRightChild(rightSibling.pid);
+				parentEntry.setLeftChild(page.pid);
 				parent.updateEntry(parentEntry);
 				//偷梁换柱，只交换key内的值，不改变指针
+				//leftSibling.updateEntry(curEntry);
+				curEntry.setRightChild(curEntry.getLeftChild());
 				rightSibling.deleteKeyAndLeftChild(curEntry);
-				curEntry.setLeftChild(page.reverseIterator().next().getRightChild());
+				Iterator<BTreeEntry> iterator2 = page.reverseIterator();
+				curEntry.setLeftChild(iterator2.next().getRightChild());
+				//非常重要，要把指针改过来，否则无法插入
 				page.insertEntry(curEntry);
 				page.updateEntry(curEntry);
 
+
+				//leftSibling.updateEntry(curEntry);
 			}
 			cur++;
 		}
+		//updateParentPointers(tid,dirtypages,leftSibling);
 		updateParentPointers(tid,dirtypages,page);
+//		int moveNum = rightSibling.getNumEntries()-(rightSibling.getNumEntries()+page.getNumEntries())/2;
+//		int cur = 0;
+//		Iterator<BTreeEntry> bTreeEntryIterator = rightSibling.iterator();
+//		BTreeEntry curEntry = null;
+//		while(cur<moveNum){
+//			if(bTreeEntryIterator.hasNext()){
+//				curEntry = bTreeEntryIterator.next();
+//				Field temp = curEntry.getKey();
+//				curEntry.setKey(parentEntry.getKey());
+//				parentEntry.setKey(temp);
+//				parent.updateEntry(parentEntry);
+//				//偷梁换柱，只交换key内的值，不改变指针
+//				rightSibling.deleteKeyAndLeftChild(curEntry);
+//				curEntry.setLeftChild(page.reverseIterator().next().getRightChild());
+//				page.insertEntry(curEntry);
+//				page.updateEntry(curEntry);
+//
+//			}
+//			cur++;
+//		}
+//		updateParentPointers(tid,dirtypages,rightSibling);
+//		updateParentPointers(tid,dirtypages,page);
+
         // Move some of the entries from the right sibling to the page so
 		// that the entries are evenly distributed. Be sure to update
 		// the corresponding parent entry. Be sure to update the parent
@@ -965,24 +1009,28 @@ public class BTreeFile implements DbFile {
 					throws DbException, IOException, TransactionAbortedException {
 
 		// some code goes here
+
+
+
         Iterator<Tuple> tupleIterator = rightPage.iterator();
         while(tupleIterator.hasNext()){
         	Tuple tuple = tupleIterator.next();
         	rightPage.deleteTuple(tuple);
         	leftPage.insertTuple(tuple);
 		}
-        if(rightPage.getRightSiblingId()!=null){
-        	leftPage.setRightSiblingId(rightPage.getRightSiblingId());
-        	//注意！右面的右面的左指针也需要调整
-			BTreeLeafPage right = (BTreeLeafPage) getPage(tid,dirtypages,rightPage.getRightSiblingId(),Permissions.READ_WRITE);
-			right.setLeftSiblingId(leftPage.pid);
+        deleteParentEntry(tid,dirtypages,leftPage,parent,parentEntry);
+		leftPage.setRightSiblingId(rightPage.getRightSiblingId());
+		if (rightPage.getRightSiblingId() != null) {
+			BTreeLeafPage rightSib =
+					(BTreeLeafPage) (this.getPage(
+							tid,
+							dirtypages,
+							rightPage.getRightSiblingId(),
+							Permissions.READ_WRITE));
+			rightSib.setLeftSiblingId(leftPage.getId());
 		}
-        else{
-        	leftPage.setRightSiblingId(null);
-		}
-        rightPage.setLeftSiblingId(null);
-		rightPage.setRightSiblingId(null);
-		parent.deleteKeyAndRightChild(parentEntry);
+
+		//parent.deleteKeyAndRightChild(parentEntry);
         //updateParentPointers(tid,dirtypages,parent);
 		setEmptyPage(tid,dirtypages,rightPage.pid.getPageNumber());
 		// Move all the tuples from the right page to the left page, update
@@ -1014,33 +1062,54 @@ public class BTreeFile implements DbFile {
 	protected void mergeInternalPages(TransactionId tid, HashMap<PageId, Page> dirtypages, 
 			BTreeInternalPage leftPage, BTreeInternalPage rightPage, BTreeInternalPage parent, BTreeEntry parentEntry) 
 					throws DbException, IOException, TransactionAbortedException {
-		
-		// some code goes here
-		deleteParentEntry(tid,dirtypages,leftPage,parent,parentEntry);
-        Iterator<BTreeEntry> leftInterator = leftPage.reverseIterator();
-        BTreeEntry lastOfLeft = leftInterator.next();
-		if(lastOfLeft!=null&&lastOfLeft.getRightChild()!=null){
-			parentEntry.setLeftChild(lastOfLeft.getRightChild());
-		}
-		else{
-			parentEntry.setLeftChild(null);
-		}
-		Iterator<BTreeEntry> rightInterator = rightPage.iterator();
-		boolean isSet = false;
+		BTreeEntry left = leftPage.reverseIterator().next();
+		BTreeEntry right = rightPage.iterator().next();
 
-		while(rightInterator.hasNext()){
-			BTreeEntry next = rightInterator.next();
-			if(!isSet){
-				parentEntry.setRightChild(next.getLeftChild());
-				leftPage.insertEntry(parentEntry);
-				isSet = true;
-			}
-			rightPage.deleteKeyAndLeftChild(next);
-			leftPage.insertEntry(next);
-			//leftPage.updateEntry(next);
+		// Move the parent entry down and rearrange it's pointers.
+		this.deleteParentEntry(tid, dirtypages, leftPage, parent, parentEntry);
+		parentEntry.setLeftChild(left.getRightChild());
+		parentEntry.setRightChild(right.getLeftChild());
+		leftPage.insertEntry(parentEntry);
+
+		// Move all of the entries from the right page to the left page.
+		Iterator<BTreeEntry> it = rightPage.iterator();
+		while (it.hasNext()) {
+			BTreeEntry entry = it.next();
+			rightPage.deleteKeyAndRightChild(entry);
+			leftPage.insertEntry(entry);
 		}
-		updateParentPointers(tid,dirtypages,leftPage);
-		setEmptyPage(tid,dirtypages,rightPage.pid.getPageNumber());
+
+		// Set the right page as empty.
+		this.setEmptyPage(tid, dirtypages, rightPage.getId().getPageNumber());
+
+		// Rearrange parent pointers.
+		this.updateParentPointers(tid, dirtypages, leftPage);
+		// some code goes here
+//		deleteParentEntry(tid,dirtypages,leftPage,parent,parentEntry);
+//        Iterator<BTreeEntry> leftInterator = leftPage.reverseIterator();
+//        BTreeEntry lastOfLeft = leftInterator.next();
+//		if(lastOfLeft!=null&&lastOfLeft.getRightChild()!=null){
+//			parentEntry.setLeftChild(lastOfLeft.getRightChild());
+//		}
+//		else{
+//			parentEntry.setLeftChild(null);
+//		}
+//		Iterator<BTreeEntry> rightInterator = rightPage.iterator();
+//		boolean isSet = false;
+//
+//		while(rightInterator.hasNext()){
+//			BTreeEntry next = rightInterator.next();
+//			if(!isSet){
+//				parentEntry.setRightChild(next.getLeftChild());
+//				leftPage.insertEntry(parentEntry);
+//				isSet = true;
+//			}
+//			rightPage.deleteKeyAndLeftChild(next);
+//			leftPage.insertEntry(next);
+//			//leftPage.updateEntry(next);
+//		}
+//		updateParentPointers(tid,dirtypages,leftPage);
+//		setEmptyPage(tid,dirtypages,rightPage.pid.getPageNumber());
         // Move all the entries from the right page to the left page, update
 		// the parent pointers of the children in the entries that were moved, 
 		// and make the right page available for reuse

@@ -219,6 +219,7 @@ public class BTreeFileDeleteTest extends SimpleDbTestBase {
 		// deleting a page of tuples should bring the internal page below minimum 
 		// occupancy and cause the entries to be redistributed
 		assertEquals(252, rightChild.getNumEmptySlots());
+		System.out.println(leftChild.getNumEmptySlots());
 		count = 0;
 		while(it.hasNext() && count < 502) {
 			BTreeLeafPage leaf = (BTreeLeafPage) Database.getBufferPool().getPage(tid, 
@@ -228,6 +229,7 @@ public class BTreeFileDeleteTest extends SimpleDbTestBase {
 			it = rightChild.iterator();
 			count++;
 		}
+		System.out.println(leftChild.getNumEmptySlots());
 		assertTrue(leftChild.getNumEmptySlots() > 203);
 		assertTrue(rightChild.getNumEmptySlots() <= 252);
 		BTreeChecker.checkRep(bf, tid, new HashMap<PageId, Page>(), true);
