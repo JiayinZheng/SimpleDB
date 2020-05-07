@@ -1009,9 +1009,6 @@ public class BTreeFile implements DbFile {
 					throws DbException, IOException, TransactionAbortedException {
 
 		// some code goes here
-
-
-
         Iterator<Tuple> tupleIterator = rightPage.iterator();
         while(tupleIterator.hasNext()){
         	Tuple tuple = tupleIterator.next();
@@ -1062,54 +1059,55 @@ public class BTreeFile implements DbFile {
 	protected void mergeInternalPages(TransactionId tid, HashMap<PageId, Page> dirtypages, 
 			BTreeInternalPage leftPage, BTreeInternalPage rightPage, BTreeInternalPage parent, BTreeEntry parentEntry) 
 					throws DbException, IOException, TransactionAbortedException {
-		BTreeEntry left = leftPage.reverseIterator().next();
-		BTreeEntry right = rightPage.iterator().next();
-
-		// Move the parent entry down and rearrange it's pointers.
-		this.deleteParentEntry(tid, dirtypages, leftPage, parent, parentEntry);
-		parentEntry.setLeftChild(left.getRightChild());
-		parentEntry.setRightChild(right.getLeftChild());
-		leftPage.insertEntry(parentEntry);
-
-		// Move all of the entries from the right page to the left page.
-		Iterator<BTreeEntry> it = rightPage.iterator();
-		while (it.hasNext()) {
-			BTreeEntry entry = it.next();
-			rightPage.deleteKeyAndRightChild(entry);
-			leftPage.insertEntry(entry);
-		}
-
-		// Set the right page as empty.
-		this.setEmptyPage(tid, dirtypages, rightPage.getId().getPageNumber());
-
-		// Rearrange parent pointers.
-		this.updateParentPointers(tid, dirtypages, leftPage);
-		// some code goes here
-//		deleteParentEntry(tid,dirtypages,leftPage,parent,parentEntry);
-//        Iterator<BTreeEntry> leftInterator = leftPage.reverseIterator();
-//        BTreeEntry lastOfLeft = leftInterator.next();
-//		if(lastOfLeft!=null&&lastOfLeft.getRightChild()!=null){
-//			parentEntry.setLeftChild(lastOfLeft.getRightChild());
-//		}
-//		else{
-//			parentEntry.setLeftChild(null);
-//		}
-//		Iterator<BTreeEntry> rightInterator = rightPage.iterator();
-//		boolean isSet = false;
+//		BTreeEntry left = leftPage.reverseIterator().next();
+//		BTreeEntry right = rightPage.iterator().next();
 //
-//		while(rightInterator.hasNext()){
-//			BTreeEntry next = rightInterator.next();
-//			if(!isSet){
-//				parentEntry.setRightChild(next.getLeftChild());
-//				leftPage.insertEntry(parentEntry);
-//				isSet = true;
-//			}
-//			rightPage.deleteKeyAndLeftChild(next);
-//			leftPage.insertEntry(next);
-//			//leftPage.updateEntry(next);
+//		// Move the parent entry down and rearrange it's pointers.
+//		this.deleteParentEntry(tid, dirtypages, leftPage, parent, parentEntry);
+//		parentEntry.setLeftChild(left.getRightChild());
+//		parentEntry.setRightChild(right.getLeftChild());
+//		leftPage.insertEntry(parentEntry);
+//
+//		// Move all of the entries from the right page to the left page.
+//		Iterator<BTreeEntry> it = rightPage.iterator();
+//		while (it.hasNext()) {
+//			BTreeEntry entry = it.next();
+//			rightPage.deleteKeyAndRightChild(entry);
+//			leftPage.insertEntry(entry);
 //		}
-//		updateParentPointers(tid,dirtypages,leftPage);
-//		setEmptyPage(tid,dirtypages,rightPage.pid.getPageNumber());
+//
+//		// Set the right page as empty.
+//		this.setEmptyPage(tid, dirtypages, rightPage.getId().getPageNumber());
+//
+//		// Rearrange parent pointers.
+//		this.updateParentPointers(tid, dirtypages, leftPage);
+
+		// some code goes here
+		deleteParentEntry(tid,dirtypages,leftPage,parent,parentEntry);
+        Iterator<BTreeEntry> leftInterator = leftPage.reverseIterator();
+        BTreeEntry lastOfLeft = leftInterator.next();
+		if(lastOfLeft!=null&&lastOfLeft.getRightChild()!=null){
+			parentEntry.setLeftChild(lastOfLeft.getRightChild());
+		}
+		else{
+			parentEntry.setLeftChild(null);
+		}
+		Iterator<BTreeEntry> rightInterator = rightPage.iterator();
+		boolean isSet = false;
+
+		while(rightInterator.hasNext()){
+			BTreeEntry next = rightInterator.next();
+			if(!isSet){
+				parentEntry.setRightChild(next.getLeftChild());
+				leftPage.insertEntry(parentEntry);
+				isSet = true;
+			}
+			rightPage.deleteKeyAndLeftChild(next);
+			leftPage.insertEntry(next);
+			//leftPage.updateEntry(next);
+		}
+		updateParentPointers(tid,dirtypages,leftPage);
+		setEmptyPage(tid,dirtypages,rightPage.pid.getPageNumber());
         // Move all the entries from the right page to the left page, update
 		// the parent pointers of the children in the entries that were moved, 
 		// and make the right page available for reuse
