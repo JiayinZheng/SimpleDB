@@ -114,32 +114,41 @@ public class HeapFile implements DbFile {
             HeapPageId heapPageId = new HeapPageId(getId(), i);
             HeapPage insertedPage =(HeapPage) Database.getBufferPool().getPage(tid, heapPageId, Permissions.READ_WRITE);
             //获取该页
+            BufferPool.PageLock pageLock = Database.getBufferPool().pageLock;
             int empty = insertedPage.getNumEmptySlots();
             if (insertedPage.getNumEmptySlots() != 0) {
                 //有空间，可以插入
                 insertedPage.insertTuple(t);
                 heapPages.add(insertedPage);
-                insertedPage.markDirty(true,tid);
+               // insertedPage.markDirty(true,tid);
                 inserted = true;
                 return heapPages;
+            }
+            else {
+                //先把原先的锁去掉
+                Database.getBufferPool().releasePage(tid,(PageId)heapPageId);
             }
         }
         if(!inserted){
             //需要新开一张page
             HeapPageId heapPageId = new HeapPageId(getId(), numPages());
             HeapPage insertedPage = null;
+
             byte[] newByte = HeapPage.createEmptyPageData();//是静态方法
             insertedPage = new HeapPage(heapPageId,newByte);
             //curNum++;
-            BufferedOutputStream bw = new BufferedOutputStream(new FileOutputStream(getFile(), true));
-            bw.write(newByte);
-            bw.close();
-            HeapPage newPage = new HeapPage(new HeapPageId(getId(), numPages() - 1),
-                    HeapPage.createEmptyPageData());
-           // HeapPage newPage = (HeapPage) Database.getBufferPool().getPage(tid, heapPageId, Permissions.READ_WRITE);
-            newPage.insertTuple(t);
-            //newPage.markDirty(true,tid);//标识脏
-            heapPages.add(newPage);
+            synchronized (heapPages){
+
+                HeapPage newPage = new HeapPage(new HeapPageId(getId(), numPages()),
+                        HeapPage.createEmptyPageData());
+                writePage(newPage);
+                newPage = (HeapPage) Database.getBufferPool().getPage(tid, heapPageId, Permissions.READ_WRITE);
+                //取回一定要走bufferpool，为了加锁
+                newPage.insertTuple(t);
+                //newPage.markDirty(true,tid);//标识脏
+                heapPages.add(newPage);
+            }
+
         }
         return heapPages;
         // not necessary for lab1

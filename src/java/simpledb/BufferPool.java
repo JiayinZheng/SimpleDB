@@ -20,6 +20,13 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class BufferPool {
     /** Bytes per page, including header. */
+    public class PageLock{
+
+        public Map<PageId,List<TransactionId>> sharedMap = new ConcurrentHashMap<>();
+        //线程安全,用于记录共享锁，本来想string区分，但是查找是否有独占锁效率太低
+        public Map<PageId,TransactionId> excluMap = new ConcurrentHashMap<>();
+        //记录独占锁
+    }
     private static final int DEFAULT_PAGE_SIZE = 4096;
 
     private static int pageSize = DEFAULT_PAGE_SIZE;
@@ -43,6 +50,11 @@ public class BufferPool {
      * @param numPages maximum number of pages in this buffer pool.
      */
     Map<PageId,Page> pageMap = new HashMap<>();//存放缓冲池的所有pages
+   // Map<PageId,Pair<TransactionId,String>> trackLocks = new HashMap<>();//记录page的锁
+    //放弃这种，因为pageid不可相同，如果采用identitymap则无法使用contains
+   // List<pageLock> pageLocks = new LinkedList<>();
+    //放弃这种，因为判断起来麻烦
+    PageLock pageLock = new PageLock();//标记锁的状态
     public BufferPool(int numPages) {
         numP = numPages;
 
@@ -79,18 +91,20 @@ public class BufferPool {
      */
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
         throws TransactionAbortedException, DbException {
+        Page page;
         if(pageMap.containsKey(pid)){
             Page heapPage = pageMap.get(pid);
             //用多态！！！
             heapPage.setUsedTimes(heapPage.getUsedTimes()+1);
-            for(Page page:usedQueue){
-                if(page.getId().equals(pid)){
+
+            for(Page p:usedQueue){
+                if(p.getId().equals(pid)){
                     //找到后更新
-                    page.setUsedTimes(page.getUsedTimes()+1);
+                    p.setUsedTimes(p.getUsedTimes()+1);
                     break;
                 }
             }
-            return pageMap.get(pid);
+            page =  pageMap.get(pid);
         }
         else{
             if(pageMap.size()>numP){
@@ -109,12 +123,94 @@ public class BufferPool {
            // HeapFile heapFile = (HeapFile)Database.getCatalog().getDatabaseFile(pid.getTableId());
             //这个地方用多态实现
             //从数据库中获得DBfile
-            Page page =  heapFile.readPage(pid);
+            page =  heapFile.readPage(pid);
             page.setUsedTimes(1);
             usedQueue.add(page);
             pageMap.put(pid,page);
-            return page;
+
         }
+        if(perm.equals(Permissions.READ_ONLY)){
+            //只需要共享锁
+            boolean flag = true;
+            while(flag){
+                //一直循环直至进入同步代码块完成上锁，注意循环在外面，否则就是抢到资源的不停循环，而其他的进不来
+                if(pageLock!=null){
+                    synchronized (pid){
+                        //参数在过程中不可被改变
+                        if(!pageLock.excluMap.containsKey(pid)||pageLock.excluMap.get(pid).equals(tid)){
+                            //没有独占锁，或本身独占
+                            if(pageLock.sharedMap.containsKey(pid)){
+                                //该页上已有共享锁
+                                List<TransactionId> list = pageLock.sharedMap.get(pid);
+                                if(!list.contains(tid)){
+                                    //列表中没有该tid
+                                    list.add(tid);
+                                    flag= false;
+                                }
+                                else{
+                                    flag= false;
+                                }
+                            }
+                            else{
+                                List<TransactionId> list = new LinkedList<>();
+                                list.add(tid);
+                                pageLock.sharedMap.put(pid,list);
+                                flag = false;
+                            }
+                        }
+                    }
+                }
+
+            }
+        }
+        else{
+            //需要独占锁
+            boolean flag = true;
+            while(flag){
+                synchronized (pid){
+                    if(pageLock.sharedMap.containsKey(pid)){
+                        List<TransactionId> list = pageLock.sharedMap.get(pid);
+                        if(list.contains(tid)){
+                            //把共享锁的移走
+                            list.remove(tid);
+                        }
+                        if(list.size()!=0)//只有共享锁被清除，才可以继续独占锁
+                            continue;
+//                        if(list.size()==0){
+//
+//                        }
+
+                    }
+                    if(pageLock.excluMap.containsKey(pid)){
+                        if(pageLock.excluMap.get(pid).equals(tid)){
+                            //已是独占锁
+                            break;
+                        }
+                    }
+                    else{
+                        pageLock.excluMap.put(pid,tid);//当没有占用时加入
+//                        if(pageLock.sharedMap.containsKey(pid)){
+//                            //该页上已有共享锁
+//                            List<TransactionId> list = pageLock.sharedMap.get(pid);
+//                            if(!list.contains(tid)){
+//                                //列表中没有该tid
+//                                list.add(tid);
+//                            }
+//                        }
+//                        else{
+//                            List<TransactionId> list = new LinkedList<>();
+//                            list.add(tid);
+//                            pageLock.sharedMap.put(pid,list);
+//                        }
+                        break;
+                    }
+                }
+
+
+            }
+
+        }
+        return page;
     }
 
     /**
@@ -129,6 +225,23 @@ public class BufferPool {
     public void releasePage(TransactionId tid, PageId pid) {
         // some code goes here
         // not necessary for lab1|lab2
+        if(pageLock.excluMap.containsKey(pid)){
+            synchronized (pid){
+                //参数为要锁的对象
+                if(pageLock.excluMap.get(pid).equals(tid)) {
+                    pageLock.excluMap.remove(pid);
+                }
+
+            }
+        }
+        else{
+            if(pageLock.sharedMap.containsKey(pid)){
+                synchronized (pageLock.sharedMap.get(pid)){
+                    pageLock.sharedMap.get(pid).remove(tid);
+                    //不用判断contains，如果没有方法会失败
+                }
+            }
+        }
     }
 
     /**
@@ -145,7 +258,20 @@ public class BufferPool {
     public boolean holdsLock(TransactionId tid, PageId p) {
         // some code goes here
         // not necessary for lab1|lab2
-        return false;
+        if((!pageLock.sharedMap.containsKey(p))&&(!pageLock.excluMap.containsKey(p)))
+            return false;
+        if(pageLock.sharedMap.containsKey(p)){
+            synchronized (pageLock.sharedMap.get(p)){
+                return pageLock.sharedMap.get(p).contains(tid);
+            }
+        }
+        else{
+
+            synchronized (pageLock.excluMap.get(p)){
+                return pageLock.excluMap.get(p).equals(tid);
+            }
+        }
+
     }
 
     /**
@@ -181,6 +307,7 @@ public class BufferPool {
         // some code goes here
         //catalog连接文件！！！
         DbFile heapFile = Database.getCatalog().getDatabaseFile(tableId);
+
         ArrayList<Page> insertedPages  = heapFile.insertTuple(tid,t);
         //找到进行插入工作的所有pages
         for(Page p:insertedPages){
