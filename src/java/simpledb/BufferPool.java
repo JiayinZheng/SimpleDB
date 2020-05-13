@@ -150,7 +150,7 @@ public class BufferPool {
             while(flag){
                 //一直循环直至进入同步代码块完成上锁，注意循环在外面，否则就是抢到资源的不停循环，而其他的进不来
                 if(pageLock!=null){
-                    synchronized (pid){
+                    synchronized (pageLock){
                         //参数在过程中不可被改变
                         if(!pageLock.excluMap.containsKey(pid)||pageLock.excluMap.get(pid).equals(tid)){
                             //没有独占锁，或本身独占
@@ -182,7 +182,7 @@ public class BufferPool {
             //需要独占锁
             boolean flag = true;
             while(flag){
-                synchronized (pageLock.excluMap){
+                synchronized (pageLock.sharedMap){
                     if(pageLock.sharedMap.containsKey(pid)){
                         List<TransactionId> list = pageLock.sharedMap.get(pid);
                         if(list.contains(tid)){
@@ -198,13 +198,16 @@ public class BufferPool {
 //                        }
 
                     }
+                }
+                synchronized (pageLock.excluMap){
 
                     if(pageLock.excluMap.containsKey(pid)){
-                        synchronized (pageLock.excluMap.get(pid)){
+                        {
                             if(pageLock.excluMap.get(pid).equals(tid)){
                                 //已是独占锁
                                 break;
                             }
+
                         }
 
                     }
@@ -409,18 +412,24 @@ public class BufferPool {
         if(pageLock.excluMap.containsValue(tid)){
             for(PageId pageId: pageLock.excluMap.keySet()){
                 if (pageLock.excluMap.get(pageId).equals(tid)){
+
                     dirtyPages.add(pageMap.get(pageId));
-                    pageLock.excluMap.remove(pageId);
+                    synchronized (pageLock.excluMap){
+                        pageLock.excluMap.remove(pageId);
+                    }
                 }
             }
         }
         for(PageId pageId: pageLock.sharedMap.keySet()){
             if(pageLock.sharedMap.get(pageId).contains(tid)){
                 dirtyPages.add(pageMap.get(pageId));
-                pageLock.sharedMap.get(pageId).remove(tid);
-                if(pageLock.sharedMap.get(pageId).size()==0){
-                    pageLock.sharedMap.remove(pageId);
+                synchronized (pageLock.sharedMap){
+                    pageLock.sharedMap.get(pageId).remove(tid);
+                    if(pageLock.sharedMap.get(pageId).size()==0){
+                        pageLock.sharedMap.remove(pageId);
+                    }
                 }
+
             }
         }
         if(commit){
@@ -513,6 +522,7 @@ public class BufferPool {
         for (Page p : deletedPages) {
             p.markDirty(true, tid);
             //脏：进行插入更新删除等操作
+
             if (!pageMap.containsValue(p)) {
                 //没有的话，要加入缓冲池
                 if (pageMap.size() < numP) {

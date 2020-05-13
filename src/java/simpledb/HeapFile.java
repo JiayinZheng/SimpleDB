@@ -120,7 +120,7 @@ public class HeapFile implements DbFile {
                 //有空间，可以插入
                 insertedPage.insertTuple(t);
                 heapPages.add(insertedPage);
-               // insertedPage.markDirty(true,tid);
+                insertedPage.markDirty(true,tid);
                 inserted = true;
                 return heapPages;
             }
@@ -145,7 +145,7 @@ public class HeapFile implements DbFile {
                 newPage = (HeapPage) Database.getBufferPool().getPage(tid, heapPageId, Permissions.READ_WRITE);
                 //取回一定要走bufferpool，为了加锁
                 newPage.insertTuple(t);
-                //newPage.markDirty(true,tid);//标识脏
+                newPage.markDirty(true,tid);//标识脏
                 heapPages.add(newPage);
             }
 
@@ -168,6 +168,7 @@ public class HeapFile implements DbFile {
                 //获取该页
                 deletedPage.deleteTuple(t);
                 heapPages.add(deletedPage);
+                deletedPage.markDirty(true,tid);
                 //这里会检查元组的存在性
             }
         }

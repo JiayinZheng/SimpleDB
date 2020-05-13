@@ -34,8 +34,9 @@ public class Insert extends Operator {
         BufferPool bufferPool = Database.getBufferPool();
         for(Page page : bufferPool.pageMap.values()){
             if(page.getId().getTableId()==tableId){
-                if(!child.getTupleDesc().equals(Database.getBufferPool().getPage(t,page.getId(),Permissions.READ_WRITE))){
-                    throw new DbException("The tuple fails to match with the existed tupleDesc!");
+                if(!child.getTupleDesc().equals(Database.getCatalog().getTupleDesc(tableId))){
+                    // 之前留下的隐患
+                        throw new DbException("The tuple fails to match with the existed tupleDesc!");
                 }
                 else{
                     heapPage = (HeapPage) page;
