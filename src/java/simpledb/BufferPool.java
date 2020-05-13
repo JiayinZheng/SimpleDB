@@ -26,6 +26,12 @@ public class BufferPool {
         //线程安全,用于记录共享锁，本来想string区分，但是查找是否有独占锁效率太低
         public Map<PageId,TransactionId> excluMap = new ConcurrentHashMap<>();
         //记录独占锁
+        public Map<TransactionId,PageId> hasExclu = new ConcurrentHashMap<>();
+        //为释放锁时效率和方便,记录哪些交易对页有独占锁
+        public Map<TransactionId,PageId> hasShared = new ConcurrentHashMap<>();
+        //记录哪些交易对页有共享锁
+        public Map<PageId,Object> isLocked = new ConcurrentHashMap<>();
+        //记录哪些页面被锁上
     }
     private static final int DEFAULT_PAGE_SIZE = 4096;
 
@@ -73,7 +79,15 @@ public class BufferPool {
     public static void resetPageSize() {
     	BufferPool.pageSize = DEFAULT_PAGE_SIZE;
     }
-
+    private Object beLocked(PageId pageId){
+        if(pageLock.isLocked.containsKey(pageId)){
+            return pageLock.isLocked.get(pageId);
+        }
+        else{
+            pageLock.isLocked.put(pageId,new Object());
+            return pageLock.isLocked.get(pageId);
+        }
+    }
     /**
      * Retrieve the specified page with the associated permissions.
      * Will acquire a lock and may block if that lock is held by another
@@ -89,6 +103,7 @@ public class BufferPool {
      * @param pid the ID of the requested page
      * @param perm the requested permissions on the page
      */
+
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
         throws TransactionAbortedException, DbException {
         Page page;
@@ -107,7 +122,7 @@ public class BufferPool {
             page =  pageMap.get(pid);
         }
         else{
-            if(pageMap.size()>numP){
+            if(pageMap.size()+1>numP){
                 evictPage();
                 //需要evict+add
                 //默认移走第一个
@@ -167,7 +182,7 @@ public class BufferPool {
             //需要独占锁
             boolean flag = true;
             while(flag){
-                synchronized (pid){
+                synchronized (pageLock.excluMap){
                     if(pageLock.sharedMap.containsKey(pid)){
                         List<TransactionId> list = pageLock.sharedMap.get(pid);
                         if(list.contains(tid)){
@@ -177,15 +192,21 @@ public class BufferPool {
                         if(list.size()!=0)//只有共享锁被清除，才可以继续独占锁
                             continue;
 //                        if(list.size()==0){
+
 //
+
 //                        }
 
                     }
+
                     if(pageLock.excluMap.containsKey(pid)){
-                        if(pageLock.excluMap.get(pid).equals(tid)){
-                            //已是独占锁
-                            break;
+                        synchronized (pageLock.excluMap.get(pid)){
+                            if(pageLock.excluMap.get(pid).equals(tid)){
+                                //已是独占锁
+                                break;
+                            }
                         }
+
                     }
                     else{
                         pageLock.excluMap.put(pid,tid);//当没有占用时加入
@@ -207,9 +228,103 @@ public class BufferPool {
                 }
 
 
+
+
+
             }
 
         }
+//        if(perm.equals(Permissions.READ_ONLY)){
+//            //只需要共享锁
+//            boolean flag = true;
+//            while(flag){
+//                //一直循环直至进入同步代码块完成上锁，注意循环在外面，否则就是抢到资源的不停循环，而其他的进不来
+//                if(pageLock!=null){
+//                    synchronized (pid){
+//                        //参数在过程中不可被改变
+//                        if(!pageLock.excluMap.containsKey(pid)||pageLock.excluMap.get(pid).equals(tid)){
+//                            //没有独占锁，或本身独占
+//                            if(pageLock.sharedMap.containsKey(pid)){
+//                                //该页上已有共享锁
+//                                List<TransactionId> list = pageLock.sharedMap.get(pid);
+//                                if(!list.contains(tid)){
+//                                    //列表中没有该tid
+//                                    list.add(tid);
+//
+//                                    flag= false;
+//                                }
+//                                else{
+//                                    flag= false;
+//                                }
+//                            }
+//                            else{
+//                                List<TransactionId> list = new LinkedList<>();
+//                                list.add(tid);
+//                                pageLock.sharedMap.put(pid,list);
+//                                flag = false;
+//                            }
+//                        }
+//                    }
+//                }
+//
+//            }
+//        }
+//        else{
+//            //需要独占锁
+//            boolean flag = true;
+//            while(flag){
+//                synchronized (pid){
+//                    if(pageLock.sharedMap.containsKey(pid)){
+//                        List<TransactionId> list = pageLock.sharedMap.get(pid);
+//                        if(list.contains(tid)){
+//                            //把共享锁的移走
+//                            list.remove(tid);
+//                        }
+//                        if(list.size()!=0)//只有共享锁被清除，才可以继续独占锁
+//                            continue;
+////                        if(list.size()==0){
+////
+////                        }
+//
+//                    }
+//                    if(pageLock.excluMap!=null){
+//                        if(pageLock.excluMap.containsKey(pid)){
+//                            if(pageLock.excluMap.get(pid).equals(tid)){
+//                                //已是独占锁
+//                                break;
+//                            }
+////                            else{
+////
+////                                pageLock.excluMap.replace(pid,tid);
+////                                break;
+////                            }
+//                        }
+//                    }
+//
+//
+//                    else{
+//                        pageLock.excluMap.put(pid,tid);//当没有占用时加入
+////                        if(pageLock.sharedMap.containsKey(pid)){
+////                            //该页上已有共享锁
+////                            List<TransactionId> list = pageLock.sharedMap.get(pid);
+////                            if(!list.contains(tid)){
+////                                //列表中没有该tid
+////                                list.add(tid);
+////                            }
+////                        }
+////                        else{
+////                            List<TransactionId> list = new LinkedList<>();
+////                            list.add(tid);
+////                            pageLock.sharedMap.put(pid,list);
+////                        }
+//                        break;
+//                    }
+//                }
+//
+//
+//            }
+//
+//        }
         return page;
     }
 
@@ -252,6 +367,7 @@ public class BufferPool {
     public void transactionComplete(TransactionId tid) throws IOException {
         // some code goes here
         // not necessary for lab1|lab2
+        transactionComplete(tid,true);
     }
 
     /** Return true if the specified transaction has a lock on the specified page */
@@ -285,6 +401,44 @@ public class BufferPool {
         throws IOException {
         // some code goes here
         // not necessary for lab1|lab2
+
+        Set<Page> dirtyPages = new LinkedHashSet<>();
+        //有可能某页上有update情况，所以需要去重
+        //清空锁
+        //应该需要调用releasePage,但是那样得不到不好和commit是否结合
+        if(pageLock.excluMap.containsValue(tid)){
+            for(PageId pageId: pageLock.excluMap.keySet()){
+                if (pageLock.excluMap.get(pageId).equals(tid)){
+                    dirtyPages.add(pageMap.get(pageId));
+                    pageLock.excluMap.remove(pageId);
+                }
+            }
+        }
+        for(PageId pageId: pageLock.sharedMap.keySet()){
+            if(pageLock.sharedMap.get(pageId).contains(tid)){
+                dirtyPages.add(pageMap.get(pageId));
+                pageLock.sharedMap.get(pageId).remove(tid);
+                if(pageLock.sharedMap.get(pageId).size()==0){
+                    pageLock.sharedMap.remove(pageId);
+                }
+            }
+        }
+        if(commit){
+            //脏页写入磁盘
+            if(dirtyPages.size()!=0){
+                for(Page p:dirtyPages){
+                    flushPage(p.getId(),tid);
+                }
+            }
+        }
+        else{
+            //恢复原始状态
+            if(dirtyPages.size()!=0){
+                for(Page p:dirtyPages){
+                    discardPage(p.getId());
+                }
+            }
+        }
     }
 
     /**
@@ -423,13 +577,23 @@ public class BufferPool {
      * Flushes a certain page to disk
      * @param pid an ID indicating the page to flush
      */
+    private synchronized  void flushPage(PageId pid, TransactionId tid) throws IOException {
+        // some code goes here
+        // not necessary for lab1
+        //即变为不dirty
+        HeapFile heapFile = (HeapFile) Database.getCatalog().getDatabaseFile(pid.getTableId());
+
+        HeapPage heapPage = (HeapPage) pageMap.get(pid);
+        heapFile.writePage(heapPage);
+        heapPage.markDirty(false,tid);//这个transactionid不知道
+    }
     private synchronized  void flushPage(PageId pid) throws IOException {
         // some code goes here
         // not necessary for lab1
         //即变为不dirty
         HeapFile heapFile = (HeapFile) Database.getCatalog().getDatabaseFile(pid.getTableId());
         HeapPage heapPage = (HeapPage) pageMap.get(pid);
-        heapPage.markDirty(true,null);//这个transactionid不知道
+        heapPage.markDirty(false,null);//这个transactionid不知道
     }
 
     /** Write all pages of the specified transaction to disk.
@@ -447,13 +611,36 @@ public class BufferPool {
         // some code goes here
         // not necessary for lab1
         //移除使用次数最少的，后续应用最小堆实现，提高效率
-        pageMap.remove(usedQueue.element().getId());
-        usedQueue.poll();
+        boolean canBeEvicted = false;
+        Page evictPage = null;
+        List<Page> pageList = new LinkedList<>();
+        while(!canBeEvicted){
+
+            if(usedQueue.element().isDirty()==null){
+                //不是脏页，可以被取出
+                canBeEvicted = true;
+                evictPage = usedQueue.element();
+            }
+            else {
+                //是脏页，不可被去除
+                pageList.add(usedQueue.poll());
+            }
+            if(usedQueue.size()==0){
+                //都是脏页,报错
+                throw new DbException("Fail to evict any page!");
+            }
+        }
+        pageMap.remove(evictPage.getId());
+        usedQueue.remove(evictPage);//注意这俩的区别！！！
+        for(int i=0;i<pageList.size();i++){
+            usedQueue.add(pageList.get(i));
+        }
+        pageList.clear();
         //自己循环遍历的（空间少，但时间复杂度高）
 //        PageId minPage = null;
 //        int minUsed = 999999;
 //        for (PageId pageId : pageMap.keySet()) {
-//            if (pageMap.get(pageId).getUsedTimes()<minUsed) {
+//            if (pageMap.get(pageId).getUsedTimes()<minUsed) s{
 //                minUsed = pageMap.get(pageId).getUsedTimes();
 //                minPage = pageId;
 //            }
