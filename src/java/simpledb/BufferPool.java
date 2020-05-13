@@ -412,8 +412,13 @@ public class BufferPool {
         if(pageLock.excluMap.containsValue(tid)){
             for(PageId pageId: pageLock.excluMap.keySet()){
                 if (pageLock.excluMap.get(pageId).equals(tid)){
+                    synchronized (dirtyPages){
+                        if(pageMap.get(pageId)!=null){
+                            dirtyPages.add(pageMap.get(pageId));
+                        }
 
-                    dirtyPages.add(pageMap.get(pageId));
+
+                    }
                     synchronized (pageLock.excluMap){
                         pageLock.excluMap.remove(pageId);
                     }
@@ -421,32 +426,47 @@ public class BufferPool {
             }
         }
         for(PageId pageId: pageLock.sharedMap.keySet()){
-            if(pageLock.sharedMap.get(pageId).contains(tid)){
-                dirtyPages.add(pageMap.get(pageId));
-                synchronized (pageLock.sharedMap){
-                    pageLock.sharedMap.get(pageId).remove(tid);
-                    if(pageLock.sharedMap.get(pageId).size()==0){
-                        pageLock.sharedMap.remove(pageId);
-                    }
-                }
+            synchronized (pageLock.sharedMap){
+                if(pageLock.sharedMap.get(pageId).contains(tid)){
+                    synchronized (dirtyPages){
+                        if(pageMap.get(pageId)!=null){
+                            dirtyPages.add(pageMap.get(pageId));
+                        }
 
+                    }
+                    {
+                        pageLock.sharedMap.get(pageId).remove(tid);
+                        if(pageLock.sharedMap.get(pageId).size()==0){
+                            pageLock.sharedMap.remove(pageId);
+                        }
+                    }
+
+                }
             }
+
         }
         if(commit){
             //脏页写入磁盘
-            if(dirtyPages.size()!=0){
-                for(Page p:dirtyPages){
-                    flushPage(p.getId(),tid);
+            synchronized (dirtyPages){
+                if(dirtyPages.size()!=0){
+                    for(Page p:dirtyPages){
+                        flushPage(p.getId(),tid);
+                        p.setBeforeImage();
+                    }
                 }
             }
+
         }
         else{
             //恢复原始状态
-            if(dirtyPages.size()!=0){
-                for(Page p:dirtyPages){
-                    discardPage(p.getId());
+            synchronized (pageMap){
+                if(dirtyPages.size()!=0){
+                    for(Page p:dirtyPages){
+                        pageMap.replace(p.getId(),p.getBeforeImage());
+                    }
                 }
             }
+
         }
     }
 
@@ -640,12 +660,19 @@ public class BufferPool {
                 throw new DbException("Fail to evict any page!");
             }
         }
-        pageMap.remove(evictPage.getId());
-        usedQueue.remove(evictPage);//注意这俩的区别！！！
-        for(int i=0;i<pageList.size();i++){
-            usedQueue.add(pageList.get(i));
+        synchronized (pageMap){
+            pageMap.remove(evictPage.getId());
         }
-        pageList.clear();
+        synchronized (usedQueue){
+            usedQueue.remove(evictPage);//注意这俩的区别！！！
+            for(int i=0;i<pageList.size();i++){
+                usedQueue.add(pageList.get(i));
+            }
+            pageList.clear();
+
+        }
+
+
         //自己循环遍历的（空间少，但时间复杂度高）
 //        PageId minPage = null;
 //        int minUsed = 999999;
