@@ -32,17 +32,21 @@ public class BufferPool {
         //记录哪些交易对页有共享锁
         public Map<PageId,Object> isLocked = new ConcurrentHashMap<>();
         //记录哪些页面被锁上
+
     }
     private static final int DEFAULT_PAGE_SIZE = 4096;
 
     private static int pageSize = DEFAULT_PAGE_SIZE;
-    
+    private static int timeLimit = 1000;
     /** Default number of pages passed to the constructor. This is used by
     other classes. BufferPool should use the numPages argument to the
     constructor instead. */
     public static final int DEFAULT_PAGES = 50;
     private int numP;
     private TransactionId transactionId;//给flush用
+    public Map<TransactionId,Long> beginTimeShared = new ConcurrentHashMap<>();
+    //记录某个交易的开始时间
+    public Map<TransactionId,Long> beginTimeExcluded = new ConcurrentHashMap<>();
     private Queue<Page> usedQueue = new PriorityQueue<>(DEFAULT_PAGES, new Comparator<Page>() {
 
         @Override
@@ -105,8 +109,161 @@ public class BufferPool {
      */
 
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
-        throws TransactionAbortedException, DbException {
+            throws TransactionAbortedException, DbException{
         Page page;
+        if(perm.equals(Permissions.READ_ONLY)){
+            //只需要共享锁
+            boolean flag = true;
+
+            while(flag){
+                //一直循环直至进入同步代码块完成上锁，注意循环在外面，否则就是抢到资源的不停循环，而其他的进不来
+                if(pageLock!=null){
+                    synchronized (pageLock){
+                        //参数在过程中不可被改变
+                        if(!pageLock.excluMap.containsKey(pid)||pageLock.excluMap.get(pid).equals(tid)){
+                            //没有独占锁，或本身独占
+                            if(pageLock.sharedMap.containsKey(pid)){
+                                //该页上已有共享锁
+                                List<TransactionId> list = pageLock.sharedMap.get(pid);
+                                if(!list.contains(tid)){
+                                    //列表中没有该tid
+                                    list.add(tid);
+                                    flag= false;
+
+                                }
+                                else{
+                                    flag= false;
+                                }
+                            }
+                            else{
+                                List<TransactionId> list = new LinkedList<>();
+                                list.add(tid);
+                                pageLock.sharedMap.put(pid,list);
+                                flag = false;
+                            }
+                        }
+                    }
+                }
+                if(pageLock!=null&&pageLock.sharedMap.containsKey(pid)) {
+                    if (!pageLock.sharedMap.get(pid).contains(tid)) {
+                        if (!beginTimeShared.containsKey(tid)) {
+                            beginTimeShared.put(tid, System.currentTimeMillis());
+                        } else {
+                            if ((System.currentTimeMillis() - beginTimeShared.get(tid)) > timeLimit) {
+                                throw new TransactionAbortedException();
+                            }
+                            else {
+                                try{
+                                    Thread.sleep(100);
+                                }
+                                catch (InterruptedException e){
+                                    e.printStackTrace();
+                                }
+
+                            }
+                        }
+                    }
+                }
+
+//                else{
+//                    beginTimeShared.remove(tid);
+//                }
+
+            }
+
+        }
+        else{
+            //需要独占锁
+            boolean flag = true;
+            boolean flag1 = true;
+            while(flag){
+
+                synchronized (pageLock.sharedMap){
+                    if(pageLock.sharedMap.containsKey(pid)){
+                        List<TransactionId> list = pageLock.sharedMap.get(pid);
+                        if(list.contains(tid)){
+                            //把共享锁的移走
+                            list.remove(tid);
+                        }
+                        if(list.size()!=0){
+                            //只有共享锁被清除，才可以继续独占锁
+                            flag1=false;
+                        }
+
+                    }
+                }
+                if(flag1){
+                    //共享锁全部清除或者没有共享锁才可进入
+                    synchronized (pageLock.excluMap){
+
+                        if(pageLock.excluMap.containsKey(pid)){
+                            {
+                                if(pageLock.excluMap.get(pid).equals(tid)){
+                                    //已是独占锁
+                                    flag1=false;
+                                    break;
+                                }
+
+                            }
+
+                        }
+                        else{
+
+                            pageLock.excluMap.put(pid,tid);//当没有占用时加入
+//                        if(pageLock.sharedMap.containsKey(pid)){
+//                            //该页上已有共享锁
+//                            List<TransactionId> list = pageLock.sharedMap.get(pid);
+//                            if(!list.contains(tid)){
+//                                //列表中没有该tid
+//                                list.add(tid);
+//                            }
+//                        }
+//                        else{
+//                            List<TransactionId> list = new LinkedList<>();
+//                            list.add(tid);
+//                            pageLock.sharedMap.put(pid,list);
+//                        }
+                            flag1=false;
+                            break;
+                        }
+                    }
+                }
+
+
+//                if(!holdsLock(tid,pid)){
+//                    if(!beginTimeExcluded.containsKey(tid)){
+//                        beginTimeExcluded.put(tid,System.currentTimeMillis());
+//                    }
+//                    else{
+//                        if((System.currentTimeMillis()-beginTimeExcluded.get(tid))>timeLimit){
+//                            throw new TransactionAbortedException();
+//                        }
+//                    }
+//
+//                }
+//                else{
+//                    beginTimeExcluded.remove(tid);
+//                }
+                //检查死锁
+                if(pageLock!=null) {
+                    if (!pageLock.excluMap.containsKey(pid)||!pageLock.excluMap.get(pid).equals(tid)) {
+                        if (!beginTimeExcluded.containsKey(tid)) {
+                            beginTimeExcluded.put(tid, System.currentTimeMillis());
+                        } else {
+                            if ((System.currentTimeMillis() - beginTimeExcluded.get(tid)) > timeLimit) {
+                                throw new TransactionAbortedException();
+                            }
+
+                        }
+                    }
+                }
+            }
+
+
+
+
+        }
+
         if(pageMap.containsKey(pid)){
             Page heapPage = pageMap.get(pid);
             //用多态！！！
@@ -144,190 +301,8 @@ public class BufferPool {
             pageMap.put(pid,page);
 
         }
-        if(perm.equals(Permissions.READ_ONLY)){
-            //只需要共享锁
-            boolean flag = true;
-            while(flag){
-                //一直循环直至进入同步代码块完成上锁，注意循环在外面，否则就是抢到资源的不停循环，而其他的进不来
-                if(pageLock!=null){
-                    synchronized (pageLock){
-                        //参数在过程中不可被改变
-                        if(!pageLock.excluMap.containsKey(pid)||pageLock.excluMap.get(pid).equals(tid)){
-                            //没有独占锁，或本身独占
-                            if(pageLock.sharedMap.containsKey(pid)){
-                                //该页上已有共享锁
-                                List<TransactionId> list = pageLock.sharedMap.get(pid);
-                                if(!list.contains(tid)){
-                                    //列表中没有该tid
-                                    list.add(tid);
-                                    flag= false;
-                                }
-                                else{
-                                    flag= false;
-                                }
-                            }
-                            else{
-                                List<TransactionId> list = new LinkedList<>();
-                                list.add(tid);
-                                pageLock.sharedMap.put(pid,list);
-                                flag = false;
-                            }
-                        }
-                    }
-                }
-
-            }
-        }
-        else{
-            //需要独占锁
-            boolean flag = true;
-            while(flag){
-                synchronized (pageLock.sharedMap){
-                    if(pageLock.sharedMap.containsKey(pid)){
-                        List<TransactionId> list = pageLock.sharedMap.get(pid);
-                        if(list.contains(tid)){
-                            //把共享锁的移走
-                            list.remove(tid);
-                        }
-                        if(list.size()!=0)//只有共享锁被清除，才可以继续独占锁
-                            continue;
-//                        if(list.size()==0){
-
-//
-
-//                        }
-
-                    }
-                }
-                synchronized (pageLock.excluMap){
-
-                    if(pageLock.excluMap.containsKey(pid)){
-                        {
-                            if(pageLock.excluMap.get(pid).equals(tid)){
-                                //已是独占锁
-                                break;
-                            }
-
-                        }
-
-                    }
-                    else{
-                        pageLock.excluMap.put(pid,tid);//当没有占用时加入
-//                        if(pageLock.sharedMap.containsKey(pid)){
-//                            //该页上已有共享锁
-//                            List<TransactionId> list = pageLock.sharedMap.get(pid);
-//                            if(!list.contains(tid)){
-//                                //列表中没有该tid
-//                                list.add(tid);
-//                            }
-//                        }
-//                        else{
-//                            List<TransactionId> list = new LinkedList<>();
-//                            list.add(tid);
-//                            pageLock.sharedMap.put(pid,list);
-//                        }
-                        break;
-                    }
-                }
 
 
-
-
-
-            }
-
-        }
-//        if(perm.equals(Permissions.READ_ONLY)){
-//            //只需要共享锁
-//            boolean flag = true;
-//            while(flag){
-//                //一直循环直至进入同步代码块完成上锁，注意循环在外面，否则就是抢到资源的不停循环，而其他的进不来
-//                if(pageLock!=null){
-//                    synchronized (pid){
-//                        //参数在过程中不可被改变
-//                        if(!pageLock.excluMap.containsKey(pid)||pageLock.excluMap.get(pid).equals(tid)){
-//                            //没有独占锁，或本身独占
-//                            if(pageLock.sharedMap.containsKey(pid)){
-//                                //该页上已有共享锁
-//                                List<TransactionId> list = pageLock.sharedMap.get(pid);
-//                                if(!list.contains(tid)){
-//                                    //列表中没有该tid
-//                                    list.add(tid);
-//
-//                                    flag= false;
-//                                }
-//                                else{
-//                                    flag= false;
-//                                }
-//                            }
-//                            else{
-//                                List<TransactionId> list = new LinkedList<>();
-//                                list.add(tid);
-//                                pageLock.sharedMap.put(pid,list);
-//                                flag = false;
-//                            }
-//                        }
-//                    }
-//                }
-//
-//            }
-//        }
-//        else{
-//            //需要独占锁
-//            boolean flag = true;
-//            while(flag){
-//                synchronized (pid){
-//                    if(pageLock.sharedMap.containsKey(pid)){
-//                        List<TransactionId> list = pageLock.sharedMap.get(pid);
-//                        if(list.contains(tid)){
-//                            //把共享锁的移走
-//                            list.remove(tid);
-//                        }
-//                        if(list.size()!=0)//只有共享锁被清除，才可以继续独占锁
-//                            continue;
-////                        if(list.size()==0){
-////
-////                        }
-//
-//                    }
-//                    if(pageLock.excluMap!=null){
-//                        if(pageLock.excluMap.containsKey(pid)){
-//                            if(pageLock.excluMap.get(pid).equals(tid)){
-//                                //已是独占锁
-//                                break;
-//                            }
-////                            else{
-////
-////                                pageLock.excluMap.replace(pid,tid);
-////                                break;
-////                            }
-//                        }
-//                    }
-//
-//
-//                    else{
-//                        pageLock.excluMap.put(pid,tid);//当没有占用时加入
-////                        if(pageLock.sharedMap.containsKey(pid)){
-////                            //该页上已有共享锁
-////                            List<TransactionId> list = pageLock.sharedMap.get(pid);
-////                            if(!list.contains(tid)){
-////                                //列表中没有该tid
-////                                list.add(tid);
-////                            }
-////                        }
-////                        else{
-////                            List<TransactionId> list = new LinkedList<>();
-////                            list.add(tid);
-////                            pageLock.sharedMap.put(pid,list);
-////                        }
-//                        break;
-//                    }
-//                }
-//
-//
-//            }
-//
-//        }
         return page;
     }
 
@@ -411,18 +386,21 @@ public class BufferPool {
         //应该需要调用releasePage,但是那样得不到不好和commit是否结合
         if(pageLock.excluMap.containsValue(tid)){
             for(PageId pageId: pageLock.excluMap.keySet()){
-                if (pageLock.excluMap.get(pageId).equals(tid)){
-                    synchronized (dirtyPages){
-                        if(pageMap.get(pageId)!=null){
-                            dirtyPages.add(pageMap.get(pageId));
+                if(pageLock.excluMap.get(pageId)!=null){
+                    if (pageLock.excluMap.get(pageId).equals(tid)){
+                        synchronized (dirtyPages){
+                            if(pageMap.get(pageId)!=null){
+                                dirtyPages.add(pageMap.get(pageId));
+                            }
+
+
                         }
-
-
-                    }
-                    synchronized (pageLock.excluMap){
-                        pageLock.excluMap.remove(pageId);
+                        synchronized (pageLock.excluMap){
+                            pageLock.excluMap.remove(pageId);
+                        }
                     }
                 }
+
             }
         }
         for(PageId pageId: pageLock.sharedMap.keySet()){
@@ -538,7 +516,8 @@ public class BufferPool {
         // not necessary for lab1
         DbFile heapFile = Database.getCatalog().getDatabaseFile(t.getRecordId().getPageId().getTableId());
         //关系 tuple有recordId->pageId->tableId
-        ArrayList<Page> deletedPages = heapFile.deleteTuple(tid, t);
+        ArrayList<Page> deletedPages = null;
+        deletedPages = heapFile.deleteTuple(tid, t);
         for (Page p : deletedPages) {
             p.markDirty(true, tid);
             //脏：进行插入更新删除等操作
